@@ -1,21 +1,23 @@
-from inspect import getmembers, isdatadescriptor, isgetsetdescriptor
-import asyncio
-from scrapers import ApiScraper
+import httpx
+import jmespath
+import pandas as pd
+
 from repo import NetworkRepo
 from resources import ApiResource, QueryString
-from schemas import JsonSchema, JsonField
-import httpx
-import pandas as pd
-import jmespath
+from schemas import JsonField, JsonSchema
+from scrapers import ApiScraper
 from yass import Yass
 
 # TODO: нужно понять как перехватывать ошибки чтобы они не уводили прогу в рекурсию
 # иначе получается очень топорно
 
-url = 'https://api.hh.ru/vacancies'
-s3_kwargs = {'endpoint_url': "https://storage.yandexcloud.net/",
-             'key': "YCAJE2ch9FookEYy7zu5No3Us", 'secret': "YCP96xrQlCajcbliwyGR1d2wnkae1Z6W-gs4aDO6"}
-n = NetworkRepo('csv', 's3', engine_kwargs=s3_kwargs, url=url)
+url = "https://api.hh.ru/vacancies"
+s3_kwargs = {
+    "endpoint_url": "https://storage.yandexcloud.net/",
+    "key": "YCAJE2ch9FookEYy7zu5No3Us",
+    "secret": "YCP96xrQlCajcbliwyGR1d2wnkae1Z6W-gs4aDO6",
+}
+n = NetworkRepo("csv", "s3", engine_kwargs=s3_kwargs, url=url)
 
 headers = {
     "Content-Type": "application/x-www-form-urlencoded",
@@ -23,10 +25,17 @@ headers = {
 }
 scr = ApiScraper(extra_headers=headers, url=url)
 
-r = ApiResource('https://api.hh.ru/vacancies', delay=2)
+r = ApiResource("https://api.hh.ru/vacancies", delay=2)
 
-q = QueryString('data_engineer', persist_fields={
-    "text": 'data+engineer+AND+python', "search_period": 5, "per_page": 100}, url=url)
+q = QueryString(
+    "data_engineer",
+    persist_fields={
+        "text": "data+engineer+AND+python",
+        "search_period": 5,
+        "per_page": 100,
+    },
+    url=url,
+)
 
 
 def prepare_area_lst(slicer: tuple[int, int] = None) -> list[int]:
@@ -38,7 +47,7 @@ def prepare_area_lst(slicer: tuple[int, int] = None) -> list[int]:
     population_df = population_df[population_df["population"] > 800000]
     population_df = population_df[["city"]]
     fmt_lst = [
-        "@.name == '{0}'".format(v)
+        f"@.name == '{v}'"
         for v in population_df["city"].to_list()
         if isinstance(v, str)
     ]
@@ -59,7 +68,7 @@ def prepare_area_lst(slicer: tuple[int, int] = None) -> list[int]:
 # TODO: нужно чтобы каждый раз каждый класс напоминал какие обязательные аттрибуты осталось установить чтобы приложение запустилось.
 # Это должен быть общий объект, наверное лучше всего реализовать это в контексте.
 areas = prepare_area_lst()
-q.set_mutable_field({'area': areas})
+q.set_mutable_field({"area": areas})
 data_pattern = jmespath.compile(
     "items[].{req_skills: snippet.requirement, expirience: experience.name}"
 )
@@ -78,20 +87,17 @@ data_pattern = jmespath.compile(
 # зарегистрированных за определенным url - так можно закрыть сложности с наследованием и вероятностью запутаться.
 # TODO: нужно создавать регистры в модулях, где описываются классы, а потом импортировать в отдельный модуль регистры
 
-with JsonSchema('vacancy_de', 'items', url=url) as schema:
-    schema['url'] = 'alternate_url'
-    schema['city'] = 'area.name'
-    schema['salary'] = 'salary.from'
-    schema['published_at'] = 'published_at'
-    schema['archived'] = 'archived'
-    schema['req_skills'] = 'snippet.requirement'
-    schema['expirience'] = 'experience.name'
+with JsonSchema("vacancy_de", "items", url=url) as schema:
+    schema["url"] = "alternate_url"
+    schema["city"] = "area.name"
+    schema["salary"] = "salary.from"
+    schema["published_at"] = "published_at"
+    schema["archived"] = "archived"
+    schema["req_skills"] = "snippet.requirement"
+    schema["expirience"] = "experience.name"
 
 
-scr.scrape.setup_trigger(period=1, start_time='11:51')
-r.set_correct_query()
-# async def test_resource():
-#     async for i in r.get_url_for():
-#         print(i)
+scr.scrape.setup_trigger(period=1, start_time="9:10")
+r.set_correct_query()  # FIXME: следствие монки патчинга, это нужно полюбому как-то разрешать.
 app = Yass()
 app.run()

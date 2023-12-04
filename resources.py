@@ -1,20 +1,20 @@
-from typing import Iterable
-from functools import partial
-from collections import defaultdict
-from attrs import define, field, validators, fields, asdict
-from typing import Any, Iterator, ClassVar
-from itertools import zip_longest
-from registies import resources_registry
-from abc import ABC, abstractmethod
 import asyncio
-from aioitertools import product as async_product
+from abc import ABC, abstractmethod
+from collections import defaultdict
+from collections.abc import Iterable, Iterator
 from contextlib import suppress
-from schemas import BaseTextSchema
+from functools import partial
+from itertools import zip_longest
+from typing import ClassVar
+
 from aioitertools import cycle
+from aioitertools import product as async_product
 from aioitertools.more_itertools import chunked
+from attrs import asdict, define, field, fields, validators
+
 import base
-from contextlib import suppress
-from contextvars import copy_context
+from registies import resources_registry
+from schemas import BaseTextSchema
 
 
 @define(slots=False)
@@ -34,7 +34,7 @@ class BaseNetworkResource(ABC):
     @abstractmethod
     async def get_url_for(self):
         """Метод, который выдает корректную ссылку на очередную порцию данных. Должен быть генератором, а также
-         в обязательном порядке предоставлять параметр задержки для корректировки нагрузки на ресурс"""
+        в обязательном порядке предоставлять параметр задержки для корректировки нагрузки на ресурс"""
         await asyncio.sleep(self.delay)
         yield
 
@@ -44,7 +44,8 @@ class BaseNetworkResource(ABC):
     def __init_subclass__(cls, rsr_type):
         if rsr_type is None:
             raise ValueError(
-                'У подклассов BaseNetworkResorce обязательно должен быть указан тип ресурса для регистрации в фабрике классов')
+                "У подклассов BaseNetworkResorce обязательно должен быть указан тип ресурса для регистрации в фабрике классов"
+            )
         resources_registry[rsr_type] = cls
         cls.resource_type = field(default=rsr_type, type=str, kw_only=True)
 
@@ -89,7 +90,7 @@ class QueryString(base.YassService):
             else:
                 full_string = next(self.persist_query)
             yield full_string
-        except (StopAsyncIteration, StopIteration) as exc:
+        except (StopAsyncIteration, StopIteration):
             pass
 
     async def build_mf_string(self):
@@ -97,7 +98,7 @@ class QueryString(base.YassService):
             self.build_mf_iterator()
         try:
             while mutable_query := await anext(self.mf_iterator):
-                result_str = ''
+                result_str = ""
                 for name, value in mutable_query:
                     result_str += f"&{name}={value}"
                 yield result_str
@@ -106,17 +107,22 @@ class QueryString(base.YassService):
 
     def build_pf_string(self):
         if not self.persist_query and self.persist_fields:
-            persist_query = '?' + \
-                "&".join([f'{key}={value}' for key,
-                         value in self.persist_fields.items()])
+            persist_query = "?" + "&".join(
+                [
+                    f"{key}={value}"
+                    for key, value in self.persist_fields.items()
+                ]
+            )
             if self.mutable_fields:
                 self.persist_query = cycle([persist_query])
             else:
                 self.persist_query = iter([persist_query])
 
     def build_mf_iterator(self):
-        mf_lst = [zip_longest([key], value, fillvalue=key)
-                  for key, value in self.mutable_fields.items()]
+        mf_lst = [
+            zip_longest([key], value, fillvalue=key)
+            for key, value in self.mutable_fields.items()
+        ]
         iterator = async_product(*mf_lst)
         self.mf_iterator = iterator
 
@@ -127,7 +133,7 @@ class QueryString(base.YassService):
         try:
             string = await anext(self.build_full_query())
             return string
-        except (StopAsyncIteration, StopIteration) as exc:
+        except (StopAsyncIteration, StopIteration):
             pass
 
     def __hash__(self) -> int:
@@ -135,10 +141,10 @@ class QueryString(base.YassService):
 
 
 @define(slots=False)
-class ApiResource(Resource, BaseNetworkResource, rsr_type='api'):
+class ApiResource(Resource, BaseNetworkResource, rsr_type="api"):
     queries: dict[str, QueryString] = field(factory=dict)
     max_pages: int = field(default=100)
-    current_query: 'QueryString' = field(init=False)
+    current_query: "QueryString" = field(init=False)
     chunk_size: int = field(default=1)
 
     def set_correct_query(self):
@@ -148,8 +154,11 @@ class ApiResource(Resource, BaseNetworkResource, rsr_type='api'):
         self.queries = query_set
 
     async def get_url_for(self, query_string_name=False):
-        queries_lst = [query for query in self.queries.values(
-        ) if query.query_name == query_string_name or not query_string_name]
+        queries_lst = [
+            query
+            for query in self.queries.values()
+            if query.query_name == query_string_name or not query_string_name
+        ]
         while len(queries_lst):
             query = queries_lst.pop()
             self.current_query = query
@@ -162,15 +171,14 @@ class ApiResource(Resource, BaseNetworkResource, rsr_type='api'):
                             self.sentinel = False
                             break
                         await asyncio.sleep(self.delay)
-                        yield f'{self.url}{query_path}&page={page}'
+                        yield f"{self.url}{query_path}&page={page}"
 
             except (StopAsyncIteration, StopIteration):
                 pass
 
     def pager(self):
         with suppress(GeneratorExit):
-            for page in range(self.max_pages):
-                yield page
+            yield from range(self.max_pages)
 
     def set_current_query(self, query_string_name):
         self.current_query = self.queries[query_string_name]
@@ -185,7 +193,7 @@ class ApiResource(Resource, BaseNetworkResource, rsr_type='api'):
         try:
             return self.schema.take_data(raw_data)
         except Exception:
-            print('There is no data here, go to the next url')
+            print("There is no data here, go to the next url")
             self.sentinel = True
             raise ValueError
 

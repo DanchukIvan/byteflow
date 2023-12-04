@@ -1,6 +1,7 @@
-from registies import fabric_registry
-import conditions
 from attrs import define, field
+
+import conditions
+from registies import fabric_registry
 
 
 class Fabric:
@@ -24,7 +25,7 @@ class Fabric:
 
 
 @define(slots=False)
-class RepoFabric(Fabric, fabric_type='repos'):
+class RepoFabric(Fabric, fabric_type="repos"):
     registry = repo_registry
 
     @classmethod
@@ -43,7 +44,7 @@ class RepoFabric(Fabric, fabric_type='repos'):
 
 
 @define(slots=False)
-class CrawlerCombine(Fabric, fabric_type='scrapers'):
+class CrawlerCombine(Fabric, fabric_type="scrapers"):
     registry = scrapers_registry
 
     @classmethod
@@ -74,7 +75,7 @@ class CrawlerCombine(Fabric, fabric_type='scrapers'):
 
 
 @define(slots=False)
-class ResourceFabric(Fabric, fabric_type='resources'):
+class ResourceFabric(Fabric, fabric_type="resources"):
     registry = resources_registry
 
     @classmethod
@@ -93,7 +94,7 @@ class ResourceFabric(Fabric, fabric_type='resources'):
 
 
 @define(slots=False)
-class SchemaFabric(Fabric, fabric_type='schemas'):
+class SchemaFabric(Fabric, fabric_type="schemas"):
     registry = schemas_registry
 
     @classmethod
@@ -111,7 +112,7 @@ class SchemaFabric(Fabric, fabric_type='schemas'):
             return cls()
 
 
-class ConditionFabric(Fabric, fabric_type='conditions'):
+class ConditionFabric(Fabric, fabric_type="conditions"):
     registry = conditions.conditions_registry
 
     @classmethod

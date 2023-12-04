@@ -1,0 +1,53 @@
+respect-gitignore = true
+fix-only = true
+show-fixes = false
+show-source = false
+line-length = 79
+select = [
+  "E401",
+  "F504",
+  "F634",
+  "F701",
+  "F841",
+  "F842",
+  "F901",
+  "W",
+  "E711",
+  "E712",
+  "E714",
+  "E703",
+  "E741",
+  "E742",
+  "E743",
+  "I001",
+  "N818",
+  "UP",
+  "YTT",
+  "FBT",
+  "A",
+  "COM818",
+  "C4",
+  "EM",
+  "G",
+  "PIE",
+  "RET506",
+  "RET507",
+  "RET508",
+  "SIM",
+  "ARG"
+]
+ignore = ["W191", "W505", "ARG001"]
+
+[format]
+line-ending = "native"
+quote-style = "double"
+skip-magic-trailing-comma = true
+
+[lint.flake8-unused-arguments]
+ignore-variadic-names = true
+
+[lint.pycodestyle]
+ignore-overlong-task-comments = true
+
+[lint.pydocstyle]
+ignore-decorators = ["typing.overload"]

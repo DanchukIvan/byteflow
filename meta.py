@@ -1,18 +1,19 @@
-from typing import ClassVar
 from abc import ABCMeta
+from typing import ClassVar
 
-__all__ = ['YassFullMeta',]
+__all__ = ["YassFullMeta"]
 
 
 class YassMeta(type):
     __error: ClassVar[BaseException] = AttributeError(
-        'Объекту должен быть передан url или в составе регулярных параметров класса, или как дополнительный ключевой аргмент')
+        "Объекту должен быть передан url или в составе регулярных параметров класса, или как дополнительный ключевой аргмент"
+    )
 
     def __call__(cls, *args, **kwargs):
-        url = ''
+        url = ""
         new_kwargs = kwargs
         try:
-            url = new_kwargs.pop('url')
+            url = new_kwargs.pop("url")
         except KeyError:
             pass
         instance = super().__call__(*args, **new_kwargs)

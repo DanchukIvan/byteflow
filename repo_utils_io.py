@@ -1,21 +1,25 @@
-from pandas import DataFrame, read_csv
 from io import BytesIO
-from difflib import SequenceMatcher
+
+from pandas import DataFrame, read_csv
 
 io_mapping = {}
 
 
 # TODO: нужна валидация что это обычная функция
 # TODO: нужно описать важные дополнительные параметры (сжатие, движки, маппинг) в сигнатуре функции
+# TODO: нужно понять как оптимизировать систему записи файлов - некоторые форматы являются текстовыми
+# и нужен универсальный метод избежать сложной логики при отсутствии потери производительности
+# FIXME: заголовки файлов почему-то пишутся в середине файла - нужно посмотреть что за хуйня
 def dispatch_io(*output_fmt):
     def io_func(func):
         for fmt in output_fmt:
             io_mapping[fmt] = func
         return func
+
     return io_func
 
 
-@dispatch_io('csv')
+@dispatch_io("csv")
 def csv(data):
     headers = None
     for item in data:
@@ -23,12 +27,12 @@ def csv(data):
         break
     df = DataFrame.from_records(data)
     buf = BytesIO()
-    df.to_csv(buf, header=headers, columns=headers, index=False)
+    df.to_csv(buf, header=headers, index=False, encoding="utf-8")
     buf.seek(0)
     return set(buf)
 
 
-@dispatch_io('xlsx', 'xls')
+@dispatch_io("xlsx", "xls")
 def excel(data):
     headers = None
     for item in data:
@@ -36,12 +40,12 @@ def excel(data):
         break
     df = DataFrame.from_records(data)
     buf = BytesIO()
-    df.to_excel(buf, index=False, header=headers, columns=headers)
+    df.to_excel(buf, index=False, header=headers)
     buf.seek(0)
     return set(buf)
 
 
-@dispatch_io('json')
+@dispatch_io("json")
 def json(data):
     df = DataFrame.from_records(data)
     buf = BytesIO()
@@ -52,7 +56,8 @@ def json(data):
 
 # TODO: посмотреть какие есть сторадж опшены для извлечения
 
-@dispatch_io('parquet')
+
+@dispatch_io("parquet")
 def parquet(data, partitions=None):
     df = DataFrame.from_records(data)
     buf = BytesIO()
@@ -61,7 +66,7 @@ def parquet(data, partitions=None):
     return set(buf)
 
 
-@dispatch_io('feather')
+@dispatch_io("feather")
 def feather(data):
     df = DataFrame.from_records(data)
     buf = BytesIO()
@@ -70,19 +75,9 @@ def feather(data):
     return set(buf)
 
 
-data = [{'data': 10500, 'name': 'price', 'location': 'Ukhta'}]
-data_2 = [{'data': 10500, 'name': 'price', 'location': 'Ukhta'},
-          {'data': 20500, 'name': 'price', 'location': 'Novgorod'}]
-
-buf_1 = BytesIO()
-buf_1.writelines(csv(data))
-buf_1.seek(0)
-buf_2 = BytesIO()
-buf_2.writelines(csv(data_2))
-buf_2.seek(0)
-mnogestvo = set(buf_2)
-delta = mnogestvo.symmetric_difference(set(buf_1))
-print(delta)
-# buf_3 = BytesIO()
-# buf_3.writelines(new_setup)
-# print(buf_3.getvalue())
+if __name__ == "__main__":
+    data = [{"data": 10500, "name": "price", "location": "Ukhta"}]
+    data_2 = [
+        {"data": 10500, "name": "price", "location": "Ukhta"},
+        {"data": 20500, "name": "price", "location": "Novgorod"},
+    ]
