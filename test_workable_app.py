@@ -97,7 +97,7 @@ with JsonSchema("vacancy_de", "items", url=url) as schema:
     schema["expirience"] = "experience.name"
 
 
-scr.scrape.setup_trigger(period=1, start_time="9:10")
+scr.scrape.setup_trigger(period=1, start_time="09:00", end_time='23:00', frequency=2)
 r.set_correct_query()  # FIXME: следствие монки патчинга, это нужно полюбому как-то разрешать.
 app = Yass()
 app.run()

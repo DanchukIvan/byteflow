@@ -91,7 +91,7 @@ class QueryString(base.YassService):
                 full_string = next(self.persist_query)
             yield full_string
         except (StopAsyncIteration, StopIteration):
-            pass
+            print(f"Gen {self.build_full_query.__name__} is over")
 
     async def build_mf_string(self):
         if not self.mf_iterator:
@@ -103,7 +103,8 @@ class QueryString(base.YassService):
                     result_str += f"&{name}={value}"
                 yield result_str
         except StopAsyncIteration:
-            pass
+            print(f"Gen {self.build_mf_string.__name__} is over")
+            self.build_mf_iterator()
 
     def build_pf_string(self):
         if not self.persist_query and self.persist_fields:
@@ -131,7 +132,8 @@ class QueryString(base.YassService):
 
     async def __anext__(self):
         try:
-            string = await anext(self.build_full_query())
+            iterable = self.build_full_query()
+            string = await anext(iterable)
             return string
         except (StopAsyncIteration, StopIteration):
             pass
@@ -174,7 +176,7 @@ class ApiResource(Resource, BaseNetworkResource, rsr_type="api"):
                         yield f"{self.url}{query_path}&page={page}"
 
             except (StopAsyncIteration, StopIteration):
-                pass
+                print(f"Gen {self.get_url_for.__name__} is over")
 
     def pager(self):
         with suppress(GeneratorExit):

@@ -281,8 +281,9 @@ class NetworkRepo(Repo, repo_type="network"):
             await self.flush(filepath, force=True)
         for file in self.opened_fd.values():
             del file
-
-        await self.session.close()
+        # FIXME: нативно в s3fs сессия после закрытия не открывается заново в движке s3. Нужно вручную открывать сессию
+        # Aibotocore3 и прокидывать ее в движок на этапе его создания. Пока сессия будет оставаться открытой.
+        # await self.session.close()
 
 
 @define(slots=False)

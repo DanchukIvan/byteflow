@@ -191,20 +191,15 @@ class MakedTrigger:
                 return_when=FIRST_COMPLETED,
             )
             print(f"Done is {done}, pending is {pending}")
+            awaiting_tasks = pending
             for task in done:
                 if task.exception() is None:
                     key = task.result()
                     if key in self.conditions.keys():
                         callback = self.context_wrapper(self.conditions[key])
                         print(f"Triggered callback is {callback}")
-                        awaiting_tasks = pending
                         awaiting_tasks.add(callback)
                         print(f"Awaiting tasks is {awaiting_tasks}")
-                    elif pending:
-                        awaiting_tasks = pending
-                    else:
-                        print("All task is succesfully done")
-                        awaiting_tasks = pending
                 else:
                     print(
                         f"Condition {task.get_coro()} finished execution with an error {task.exception()}"

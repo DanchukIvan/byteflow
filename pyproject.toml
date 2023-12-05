@@ -13,8 +13,11 @@ changelog_file = 'CHANGELOG.rst'
 encoding = 'utf-8'
 
 [tool.commitizen.customize]
-change_type_map = {"removal" = "Deprecated functionality", "feat" = "New features", "build" = "Updated external dependencies", "refactor" = "Refactored", "perf" = "Performance improvements", "fix" = "Bugfixes and patches", docs = "Documentation changes", "hotfix" = "Hotfixes", "style" = "Code style improvements"}
+# FIXME: cz очень сырой - он не распознает кастомные настройки парсинга, в связи с чем его можно использовать
+# только для бампинга версий и формирования changelog (и то это под вопросом). Соответственно хук нужно сносить.
+schema_pattern = '(?s)(build|ci|docs|feat|fix|perf|refactor|ref|removal|remove_feat|hotfix|style|test|chore|revert|bump)(\(\S+\))?!?:( [^\n\r]+)([\n\n.]*|[ ]*)([\S\s]+)'
 bump_map = {"break" = "MAJOR", "removal" = "MAJOR", "feat" = "MINOR", "build" = "MINOR", "perf" = 'PATCH', "fix" = "PATCH", "docs" = "PATCH", "hotfix" = "PATCH"}
+change_type_map = {"removal" = "Deprecated API", "remove_feat" = "Deprecated features", "feat" = "New features", "build" = "Updated external dependencies", "ref" = "Refactored", "perf" = "Performance improvements", "fix" = "Bugfixes and patches", docs = "Documentation changes", "hotfix" = "Hotfixes", "style" = "Code style improvements"}
 
 [tool.poetry]
 name = "yass"

@@ -38,13 +38,13 @@ repos:
   #   rev: v3.12.0
   #   hooks:
   #   -   id: reorder-python-imports
-  - repo: https://github.com/commitizen-tools/commitizen
-    rev: 3.12.0
-    hooks:
-      - id: commitizen
-        stages:
-          - prepare-commit-msg
-          - commit-msg
+  # - repo: https://github.com/commitizen-tools/commitizen
+  #   rev: 3.12.0
+  #   hooks:
+  #     - id: commitizen
+  #       stages:
+  #         - prepare-commit-msg
+  #         - commit-msg
       # - id: commitizen-branch
       #   stages:
       #     - post-commit
