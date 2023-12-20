@@ -1,13 +1,12 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable
-from datetime import datetime
 from typing import Any
 
 import jmespath
+import polars as pl
 import pyarrow as pa
 from attrs import define, field, validators
 from jmespath.parser import ParsedResult
-from pyarrow import MemoryMappedFile
 from regex import regex
 
 import base
@@ -15,9 +14,10 @@ from registies import schemas_registry
 
 
 @define(slots=False)
-class BaseTextSchema(ABC, base.YassService):
+class BaseTextSchema(ABC, base.YassAttr):
     schema_name: str = field()
     item_path: str = field()
+    context: dict = field()
     item_fields: dict[str, str] = field(factory=dict)
     search_pattern: Any = field(init=False)
     metadata: dict = field(factory=dict)
@@ -26,10 +26,11 @@ class BaseTextSchema(ABC, base.YassService):
         return self.item_fields
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.create_pattern()
+        pass
+        # self.create_pattern()
 
     @abstractmethod
-    def take_data(self):
+    def transform(self):
         """Метод, который ищет в объекте данных по паттерну нужные поля и сохраняет их в инстанс схемы"""
 
     @abstractmethod
@@ -41,6 +42,7 @@ class BaseTextSchema(ABC, base.YassService):
             raise ValueError(
                 "У подклассов BaseSchema обязательно нужно имя для регистрации в фабрике классов"
             )
+
         schemas_registry[schema_name] = cls
 
     def __hash__(self) -> int:
@@ -51,21 +53,51 @@ class BaseTextSchema(ABC, base.YassService):
 class JsonSchema(BaseTextSchema, schema_name="json"):
     search_pattern: ParsedResult = field(init=False)
 
-    def take_data(self, data):
-        data = self.search_pattern.search(data)
-        if data is None or not data:
-            raise ValueError("Данные закончились, выходи из цикла")
-        if not self.metadata:
-            query = self.get_context(rtrn_supercls=True)
-            resource = self.get_context(instance=query, rtrn_supercls=True)
-            self.metadata = {
-                "url": resource.url,
-                "type": resource.resource_type,
-            }
-        self.metadata = self.metadata | {"created_at": datetime.now()}
-        for data_line in data:
-            data_line.update(self.metadata)
-        return data
+    def __attrs_post_init__(self):
+        extension = self.schema_name
+        self.settings.io.input_fmt = extension  # TODO: вот это вот должен устанавливать объект запроса или ресурс, но для целей теста пока оставлю так
+        self.settings.io.schema_registry[extension] = self
+
+    def print_json_paths(self):
+        columns = {}
+        for name, path in self.item_fields.items():
+            column = f"$.{self.item_path}[*].{path}"
+            columns.update({name: column})
+        return columns
+
+    def transform(self, raw_dataframe: "pl.DataFrame"):
+        dataframe: pl.DataFrame = pl.concat(
+            raw_dataframe[self.item_path]
+        ).to_frame(self.item_path)
+        print(dataframe.head())
+        if dataframe[self.item_path].dtype is pl.Null:
+            print(
+                f"Here is nothing. {self.__class__.__name__} return sentinel"
+            )
+            return False, True
+        columns = []
+        for name, path in self.item_fields.items():
+            column = (
+                pl.col("json").str.json_path_match(f"$.{path}").alias(name)
+            )
+            columns.append(column)
+        struct_frame = dataframe.with_columns(
+            pl.select(
+                json=pl.lit(
+                    dataframe.select(self.item_path)
+                    .unnest(self.item_path)
+                    .write_ndjson()
+                )
+                .str.strip("\n")
+                .str.split("\n")
+            ).explode("json")
+        )
+        print(struct_frame.head())
+        final_dataframe = struct_frame.with_columns(columns)
+        final_dataframe = final_dataframe.drop([self.item_path, "json"])
+        print(final_dataframe.head())
+        final_dataframe = final_dataframe.rechunk()
+        return final_dataframe, False
 
     @property
     def schema_metadata(self):
@@ -84,7 +116,7 @@ class JsonSchema(BaseTextSchema, schema_name="json"):
         for name, path in self.item_fields.items():
             to_join_string.append(f"{name}: {path}")
         fields_string = ", ".join(to_join_string)
-        full_pattern_string = f"{self.item_path}[].{{{fields_string}}}"
+        full_pattern_string = f"$.{self.item_path}[*].{fields_string}"
         return full_pattern_string
 
     def set_item_field(self, field_obj):
@@ -140,7 +172,7 @@ def validate_index(instance, attribute, index):
             )
 
 
-class DataField(base.YassService):
+class DataField(base.YassAttr):
     ...
 
 
@@ -204,13 +236,13 @@ class JsonField(DataField):
 
 if __name__ == "__main__":
     url = "https"
-    # with (j := JsonSchema('vacancy_de', 'items', url=url)) as schema:
-    #     schema['url'] = 'alternate_url'
-    #     schema['city'] = 'area.name'
-    #     schema['salary'] = 'salary.from'
-    #     schema['published_at'] = 'published_at'
-    #     schema['archived'] = 'archived'
-    #     schema['req_skills'] = 'snippet.requirement'
-    #     schema['expirience'] = 'experience.name'
+    with (j := JsonSchema("vacancy_de", "items", url=url)) as schema:
+        schema["url"] = "alternate_url"
+        schema["city"] = "area.name"
+        schema["salary"] = "salary.from"
+        schema["published_at"] = "published_at"
+        schema["archived"] = "archived"
+        schema["req_skills"] = "snippet.requirement"
+        schema["expirience"] = "experience.name"
 
-    # print(j.create_field_string())
+    print(j.create_field_string())

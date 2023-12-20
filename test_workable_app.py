@@ -2,14 +2,19 @@ import httpx
 import jmespath
 import pandas as pd
 
-from repo import NetworkRepo
-from resources import ApiResource, QueryString
-from schemas import JsonField, JsonSchema
-from scrapers import ApiScraper
+from resources import QueryString
+from schemas import JsonSchema
 from yass import Yass
 
-# TODO: нужно понять как перехватывать ошибки чтобы они не уводили прогу в рекурсию
-# иначе получается очень топорно
+app = Yass()
+builder = app.create_context()
+
+headers = {
+    "Content-Type": "application/x-www-form-urlencoded",
+    "Authorization": "Bearer APPLQOF89F6EC73OPSF8P75TB39VA0PNP624S3DO42MT8298OLM4E5991N06A1OC",
+}
+
+scraper = builder.create_scraper("api", extra_headers=headers)
 
 url = "https://api.hh.ru/vacancies"
 s3_kwargs = {
@@ -17,24 +22,17 @@ s3_kwargs = {
     "key": "YCAJE2ch9FookEYy7zu5No3Us",
     "secret": "YCP96xrQlCajcbliwyGR1d2wnkae1Z6W-gs4aDO6",
 }
-n = NetworkRepo("csv", "s3", engine_kwargs=s3_kwargs, url=url)
 
-headers = {
-    "Content-Type": "application/x-www-form-urlencoded",
-    "Authorization": "Bearer APPLQOF89F6EC73OPSF8P75TB39VA0PNP624S3DO42MT8298OLM4E5991N06A1OC",
-}
-scr = ApiScraper(extra_headers=headers, url=url)
-
-r = ApiResource("https://api.hh.ru/vacancies", delay=2)
+resource = builder.create_resource("api", url, 1)
+repo = builder.create_repo("network", "csv", engine_kwargs=s3_kwargs)
 
 q = QueryString(
-    "data_engineer",
+    "data_engineer_2",
     persist_fields={
         "text": "data+engineer+AND+python",
         "search_period": 5,
         "per_page": 100,
     },
-    url=url,
 )
 
 
@@ -56,38 +54,18 @@ def prepare_area_lst(slicer: tuple[int, int] = None) -> list[int]:
         f"[0].areas[*].areas[?({pattern_area_ids})].id[]"
     )
     with httpx.Client() as client:
-        res = client.get("https://api.hh.ru/areas")
+        res = client.get("https://api.hh.ru/areas", headers=headers)
         areas: list[int] = area_pattern.search(res.json())
         if slicer:
             return areas[slice(*slicer)]
         return areas
 
 
-# TODO: перед запуском приложение должно попробовать сбиндить все аргументы, так как некоторые параметры
-# могут быть дополнены без инициализации новых классов. Вообще стоит подумать нужно ли вызывать биндинг в метаклассе.
-# TODO: нужно чтобы каждый раз каждый класс напоминал какие обязательные аттрибуты осталось установить чтобы приложение запустилось.
-# Это должен быть общий объект, наверное лучше всего реализовать это в контексте.
 areas = prepare_area_lst()
 q.set_mutable_field({"area": areas})
-data_pattern = jmespath.compile(
-    "items[].{req_skills: snippet.requirement, expirience: experience.name}"
-)
-# TODO: Нужно регистрировать поля по квери объекту или имени квери, чтобы сразу в него добавлялся объект
-# url_f = JsonField('url', 'alternate_url', 'key', url=url)
-# vacancy_name = JsonField('vacancy', 'area.name', 'dict.key', url=url)
-# salary = JsonField('salary', 'salary.from', 'dict.key', url=url)
-# publish_date = JsonField('publish_at', 'published_at', 'key', url=url)
-# archived = JsonField('archived', 'archived', 'key', url=url)
-# req_skills = JsonField(
-#     'req_skills', 'snippet.requirement', 'dict.key', url=url)
-# experience = JsonField('expirience', 'experience.name', 'dict.key', url=url)
+resource.put_query(q)
 
-# TODO: нужно понять как мапить списки. Скорее всего через прокси-типы.
-# TODO: подумать над тем, чтобы искать аннотацию аттрибута среди mro других объектов,
-# зарегистрированных за определенным url - так можно закрыть сложности с наследованием и вероятностью запутаться.
-# TODO: нужно создавать регистры в модулях, где описываются классы, а потом импортировать в отдельный модуль регистры
-
-with JsonSchema("vacancy_de", "items", url=url) as schema:
+with (json_s := JsonSchema("json", "items", resource.context)) as schema:
     schema["url"] = "alternate_url"
     schema["city"] = "area.name"
     schema["salary"] = "salary.from"
@@ -96,8 +74,10 @@ with JsonSchema("vacancy_de", "items", url=url) as schema:
     schema["req_skills"] = "snippet.requirement"
     schema["expirience"] = "experience.name"
 
+q.schema = json_s
 
-scr.scrape.setup_trigger(period=1, start_time="09:00", end_time='23:00', frequency=2)
-r.set_correct_query()  # FIXME: следствие монки патчинга, это нужно полюбому как-то разрешать.
-app = Yass()
+builder.check_ready()
+scraper.scrape.setup_trigger(
+    period=1, start_time="08:00", end_time="23:00", frequency=3
+)
 app.run()

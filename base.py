@@ -1,10 +1,16 @@
 from abc import ABC, ABCMeta
-from asyncio import (FIRST_COMPLETED, Condition, create_task, gather, sleep,
-                     wait)
+from asyncio import (
+    FIRST_COMPLETED,
+    Condition,
+    create_task,
+    gather,
+    sleep,
+    wait,
+)
 from inspect import isclass
 from typing import get_type_hints
 
-from attrs import define, field
+from attrs import define, field, fields
 
 import meta
 
@@ -19,6 +25,106 @@ from typing import Any, ClassVar, get_args, get_origin
 from attrs import define, field, fields
 
 lock = Lock()
+
+
+@define(slots=False)
+class IOSettings:
+    input_fmt: str = field(default="json")
+    output_fmt: str = field(default="csv")
+    path_temp: str = field(default="")
+    schema_registry: dict = field(factory=dict)
+
+
+@define(slots=False)
+class CommonSettings:
+    max_retry: int = field(default=3)
+    req_delay: int = field(default=1)
+    strict_schema_definition: bool = False
+
+
+@define
+class Settings:
+    io: "IOSettings" = IOSettings()
+    common: "CommonSettings" = CommonSettings()
+
+
+import builtins
+
+from dotted_dict import DottedDict
+
+
+class Context(DottedDict):
+    def __init__(self):
+        self.settings = Settings()
+
+    # TODO: вызывается только в двух случаях - из билдера и из приложения
+    def bind_args(self):
+        ctx_classes = list(self.values())
+        ctx_classes.remove(self.settings)
+        for yass_cls in ctx_classes:
+            current_cls = yass_cls
+            annotations: dict = {
+                k: v
+                for k, v in current_cls.get_annotations().items()
+                if v not in builtins.__dict__.values()
+            }
+            maybe_attr = [
+                c for c in self.values() if c != current_cls
+            ]  # TODO: нужно добавить проверку что объект не является подклассом класса-аттрибута
+            for attr, annotation in annotations.items():
+                print(attr, annotation)
+                for obj in maybe_attr:
+                    mro = obj.__class__.mro()
+                    if (
+                        annotation in mro
+                        or get_origin(annotation) in mro
+                        or any(i in get_args(annotation) for i in mro)
+                    ):
+                        setattr(current_cls, attr, obj)
+                        print(
+                            f"Set attr {attr} as bind obj {obj.__class__.__name__}"
+                        )
+
+
+fabric_registry = {}
+
+
+def create_instance(self, func, attr, cls_type, *args, **kwargs):
+    impl = func(cls_type, *args, **kwargs)
+    self.context[attr] = impl
+    setattr(impl, "context", self.context)
+    return impl
+
+
+from functools import partialmethod
+
+
+class EnvMeta(type):
+    attr_registry = fabric_registry
+
+    def __call__(cls, *args: Any, **kwds: Any) -> Any:
+        instance = super().__call__(*args, **kwds)
+        for attr in cls.attr_registry:
+            method_name = "create_" + attr
+            # TODO: нужно как-то сделать так чтобы метод подсвечивался при вызове и
+            # заинжектить сигнатуру в функцию. Наверное, нужен будет свой дескриптор ибо бля ниче
+            # не биндится как нужно - нам нужен метод с геттом и подсветкой синтаксиса.
+            method = partialmethod(
+                create_instance, cls.attr_registry[attr].build_class, attr
+            )
+            method.__name__ = method_name
+            setattr(
+                instance, method_name, method.__get__(instance, type(instance))
+            )
+        return instance
+
+
+class EnvBuilder(metaclass=EnvMeta):
+    def __init__(self, context):
+        self.context: Context = context
+
+    def check_ready(self):
+        self.context.bind_args()
 
 
 @define(slots=False)
@@ -201,6 +307,8 @@ class MakedTrigger:
                         awaiting_tasks.add(callback)
                         print(f"Awaiting tasks is {awaiting_tasks}")
                 else:
+                    # TODO: здесь будут обрабатываться ошибки, которые можно исправить
+                    # и перезагрузить исполнение
                     print(
                         f"Condition {task.get_coro()} finished execution with an error {task.exception()}"
                     )
@@ -249,6 +357,78 @@ def get_base(instance_or_class):
 
 initial_context = InitContext()
 application_context = defaultdict(dict)
+
+from inspect import signature
+
+
+class BaseFabric:
+    registry: dict
+
+    @classmethod
+    def build_class(cls, cls_type, *args, **kwargs):
+        impl = cls.registry[cls_type]
+        sig = signature(impl)
+        return impl() if len(sig.parameters) == 0 else impl(*args, **kwargs)
+
+    @classmethod
+    def get_classes(cls):
+        lst = [key for key in cls.registry]
+        return lst
+
+    @classmethod
+    def new_class(cls, cls_type, impl):
+        cls.registry[cls_type] = impl
+        return
+
+
+from inspect import isabstract
+from typing import Protocol
+
+
+class YassCore:
+    # TODO: чисто теоретически данный класс должен создавать для классов-аттрибутов методы геттеры/сеттеры,
+    # но подумаю потом как это реализовать
+    context: dict  # контекст заполняется в момент биндинга аргументов
+
+    def get_annotations(self):
+        d = {}
+        base_classes = [
+            c for c in self.__class__.mro() if c not in (Protocol, object)
+        ]
+        for c in base_classes:
+            try:
+                d.update(**get_type_hints(c))
+            except AttributeError:
+                # object, at least, has no __annotations__ attribute.
+                pass
+        return d
+
+    def __init_subclass__(cls, cls_type=None) -> None:
+        if registry := getattr(cls, "_registry", False):
+            if cls_type is None:
+                raise AttributeError(
+                    "Подкласс базового класса должен быть объявлен с типом класса"
+                )
+            if isabstract(cls):
+                print(
+                    f"Class {cls.__name__} is abstract class, registration is aborted"
+                )
+                return
+            print(f"New class {cls.__name__} in registry")
+            registry.new_class(cls_type, cls)
+            return
+        elif YassCore not in cls.__bases__:
+            name = cls.__name__.lower()
+            fabric_name = name.capitalize() + "Fabric"
+            registr = dict()
+            fabric = type(fabric_name, (BaseFabric,), {"registry": registr})
+            fabric_registry[name] = fabric
+            setattr(cls, "_registry", fabric)
+            return
+
+    @property
+    def settings(self):
+        return self.context.settings
 
 
 @define(slots=False)
@@ -300,52 +480,19 @@ class ContextMixin:
 
 
 @define(slots=False)
-class YassActor(ContextMixin, metaclass=meta.YassFullMeta):
+class YassActor(YassCore):
     trigger: MakedTrigger = field(factory=MakedTrigger)
 
-    def get_annotations(self):
-        d = {}
-        base_classes = [
-            c
-            for c in self.__class__.mro()
-            if c not in (ABC, ContextMixin, ABCMeta, object)
-        ]
-        for c in base_classes:
-            try:
-                d.update(**get_type_hints(c))
-            except AttributeError:
-                # object, at least, has no __annotations__ attribute.
-                pass
-        return d
 
+@define(slots=False)
+class YassService(YassCore):
+    ...
+
+
+@define(slots=False)
+class YassAttr(YassCore):
     def __init_subclass__(cls) -> None:
-        if cls.meta is None:
-            raise NameError(
-                "У всех подклассов Actor должна быть определена метаинформация для маппинга атрибутов в приложении"
-            )
-
-
-@define(slots=False)
-class YassService(ContextMixin, metaclass=meta.YassFullMeta):
-    def get_annotations(self):
-        d = {}
-        base_classes = [
-            c
-            for c in self.__class__.mro()
-            if c not in (ABC, ContextMixin, ABCMeta, object)
-        ]
-        for c in base_classes:
-            try:
-                d.update(**get_type_hints(c))
-            except AttributeError:
-                # object, at least, has no __annotations__ attribute.
-                pass
-        return d
-
-
-@define(slots=False)
-class YassAttr(ContextMixin):
-    pass
+        pass
 
 
 if __name__ == "__main__":

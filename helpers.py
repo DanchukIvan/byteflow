@@ -22,10 +22,9 @@ class ProxyMethodDesc:
     def setup_trigger(self, *args, tr_type="time_condition", **kwargs):
         cond = conditions_set[tr_type](*args, **kwargs)
         conditions_instances[cond] = self.func
-        # conditions_instances[cond] = partial(self.func, self.obj)
 
     def __call__(self, *args: Any, **kwds: Any) -> Any:
-        return self.func(*args, **kwds)
+        return self.func(args, kwds)
 
 
 def mark_as_trigger(func) -> "ProxyMethodDesc":
@@ -49,15 +48,6 @@ def to_async(func):
 
 def register(container, class_object, name):
     container[name] = class_object
-
-
-class TestThread:
-    data: ProxyMethodDesc = 100
-
-    @mark_as_trigger
-    def printer(self, value):
-        """Тестовая функция"""
-        return value
 
 
 # print(get_origin(t.__annotations__['data']))

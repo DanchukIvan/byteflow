@@ -13,13 +13,15 @@ from aioitertools.more_itertools import chunked
 from attrs import asdict, define, field, fields, validators
 
 import base
-from registies import resources_registry
 from schemas import BaseTextSchema
 
 
 @define(slots=False)
 class Resource(base.YassService):
     sentinel: ClassVar[bool] = field(default=False, kw_only=True)
+
+    def __init_subclass__(cls, rsr_type=None) -> None:
+        return super().__init_subclass__(rsr_type)
 
 
 # TODO: понять как можно вытаскивать чанки из ресурса - на уровне скрапера или на уровне ресурса?
@@ -41,13 +43,13 @@ class BaseNetworkResource(ABC):
     def set_delay(self, delay):
         self.delay = delay
 
-    def __init_subclass__(cls, rsr_type):
-        if rsr_type is None:
-            raise ValueError(
-                "У подклассов BaseNetworkResorce обязательно должен быть указан тип ресурса для регистрации в фабрике классов"
-            )
-        resources_registry[rsr_type] = cls
-        cls.resource_type = field(default=rsr_type, type=str, kw_only=True)
+    # def __init_subclass__(cls, rsr_type):
+    # if rsr_type is None:
+    #     raise ValueError(
+    #         "У подклассов BaseNetworkResorce обязательно должен быть указан тип ресурса для регистрации в фабрике классов"
+    #     )
+    # resources_registry[rsr_type] = cls
+    # cls.resource_type = field(default=rsr_type, type=str, kw_only=True)
 
 
 def parse_to_dict(instance, attribute, value):
@@ -60,7 +62,7 @@ mf = partial(defaultdict, list)
 
 
 @define(slots=False)
-class QueryString(base.YassService):
+class QueryString(base.YassAttr):
     query_name: str = field()
     schema: BaseTextSchema = field(init=False)
     persist_fields: dict[str, str] = field(factory=dict)
@@ -143,10 +145,10 @@ class QueryString(base.YassService):
 
 
 @define(slots=False)
-class ApiResource(Resource, BaseNetworkResource, rsr_type="api"):
+class ApiResource(BaseNetworkResource, Resource, rsr_type="api"):
     queries: dict[str, QueryString] = field(factory=dict)
     max_pages: int = field(default=100)
-    current_query: "QueryString" = field(init=False)
+    current_query: "QueryString" = field(init=False, eq=False)
     chunk_size: int = field(default=1)
 
     def set_correct_query(self):

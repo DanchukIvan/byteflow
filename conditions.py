@@ -175,7 +175,9 @@ class TimeCondition(BaseCondition, condition_name="time_condition"):
             self.end_time = OneShotRun()
         # TODO: меня бесит эта фигня, что нужно передавать self; посмотреть что можно сделать
         if self.end_time and not self.frequency or self.frequency < 0:
-            raise RuntimeError("Частота не может быть меньше или равна нулю при заданном окончании интервала сбора данных")
+            raise RuntimeError(
+                "Частота не может быть меньше или равна нулю при заданном окончании интервала сбора данных"
+            )
         self.period_to_cycle(self.get_period)
         self.set_next_launch()
 
@@ -235,9 +237,15 @@ class TimeCondition(BaseCondition, condition_name="time_condition"):
     def reset(self):
         print("Reset all config to the next cycle")
         if self.frequency:
-            freq_lag = (datetime.now() - self.next_launch)//timedelta(hours=1)
-            delta = timedelta(hours=freq_lag) if freq_lag > self.frequency else timedelta(hours=self.frequency)
-            self.next_launch += delta 
+            freq_lag = (datetime.now() - self.next_launch) // timedelta(
+                hours=1
+            )
+            delta = (
+                timedelta(hours=freq_lag)
+                if freq_lag > self.frequency
+                else timedelta(hours=self.frequency)
+            )
+            self.next_launch += delta
         if isinstance(self.end_time, OneShotRun):
             self.end_time.reset()
         if self.next_launch.time() > self.end_time:
