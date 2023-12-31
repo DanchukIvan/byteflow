@@ -43,20 +43,27 @@ def prepare_area_lst(slicer: tuple[int, int] = None) -> list[int]:
     # Нужно будет сделать более гибкие параметры выбора населения.
     # Хотя все "улучшения" делать нужно все таки после первой MVP версии.
     population_df = population_df[population_df["population"] > 800000]
-    population_df = population_df[["city"]]
+    population_df = population_df[["address"]]
+    population_df["address"] = population_df["address"].str.extract(
+        r"(?<=г )([\w\- ]+)"
+    )
     fmt_lst = [
         f"@.name == '{v}'"
-        for v in population_df["city"].to_list()
+        for v in population_df["address"]
         if isinstance(v, str)
     ]
     pattern_area_ids = "||".join(fmt_lst)
+    print(pattern_area_ids)
     area_pattern = jmespath.compile(
-        f"[0].areas[*].areas[?({pattern_area_ids})].id[]"
+        f"[0].areas[*].areas[?{pattern_area_ids}].id[]"
     )
+    area_pattern2 = jmespath.compile(f"[0].areas[?{pattern_area_ids}].id[]")
     with httpx.Client() as client:
         res = client.get("https://api.hh.ru/areas", headers=headers)
         areas: list[int] = area_pattern.search(res.json())
-        if slicer:
+        areas2 = area_pattern2.search(res.json())
+        areas.extend(areas2)
+        if slicer is not None:
             return areas[slice(*slicer)]
         return areas
 
