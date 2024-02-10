@@ -1,62 +1,84 @@
+import asyncio
+import inspect
 from asyncio import to_thread
-from functools import update_wrapper, wraps
-from inspect import iscoroutinefunction
-from typing import Any
+from collections.abc import Awaitable, Callable
+from functools import wraps
+from inspect import iscoroutinefunction, isfunction
+from typing import Any, Literal, ParamSpec, Self, TypeVar
 
-from base import conditions_instances
-from conditions import conditions_set
+T = TypeVar("T")
+P = ParamSpec("P")
 
-
-class ProxyMethodDesc:
-    def __init__(self, func):
-        self.func = func
-        self.obj = None
-        print(f"Create trigger on {self.func}")
-
-    def __get__(self, instance, owner=None):
-        if self.obj is None:
-            self.obj = instance
-        self.func = self.func.__get__(self.obj, self.obj.__class__)
-        return self
-
-    def setup_trigger(self, *args, tr_type="time_condition", **kwargs):
-        cond = conditions_set[tr_type](*args, **kwargs)
-        conditions_instances[cond] = self.func
-
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
-        return self.func(args, kwds)
+from dataclasses import dataclass
 
 
-def mark_as_trigger(func) -> "ProxyMethodDesc":
-    proxy = ProxyMethodDesc(func)
-    update_wrapper(proxy, func)
-    return proxy
-
-
-def to_async(func):
+def to_async(func: Callable[P, T]) -> Callable[..., Awaitable[T]]:
     @wraps(func)
-    async def wrapped(*args, **kwargs):
-        if not iscoroutinefunction(func):
-            print("Make function asynchronus")
-            return await to_thread(func, *args, **kwargs)
-        else:
-            print("Funcion yet is coroutine")
-            return await func(*args, **kwargs)
+    def wrapped(*args: P.args, **kwargs: P.kwargs) -> Awaitable[T]:
+        return to_thread(func, *args, **kwargs)
 
     return wrapped
 
 
-def register(container, class_object, name):
-    container[name] = class_object
+def make_async(cls: type[Any]) -> type:
+    members: list[tuple[str, Callable]] = inspect.getmembers(cls, isfunction)
+    for name, meth in members:
+        if not name.startswith("__"):
+            if iscoroutinefunction(meth):
+                continue
+            setattr(cls, name, to_async(meth))  # type: ignore
+    return cls
 
 
-# print(get_origin(t.__annotations__['data']))
+class MakeAsyncMixin:
+    def __getattribute__(self: Self, __name: str) -> Awaitable | Any:
+        attr: Any = object.__getattribute__(self, __name)
+        if (
+            not __name.startswith("__")
+            and not iscoroutinefunction(attr)
+            and callable(attr)
+        ):
+            return to_async(attr)
+        return attr
 
 
-# async def main(value):
-#     t = TestThread()
-#     t.printer.setup_trigger(period=1, start_time='13.00')
-#     num = await t.printer(value)
+SizeUnit = Literal[
+    "b", "bytes", "kb", "kilobytes", "mb", "megabytes", "gb", "gigabytes"
+]
 
 
-# run(main(10))
+def scale_bytes(sz: int | float, unit: SizeUnit) -> int | float:
+    """Scale size in bytes to other size units (eg: "kb", "mb", "gb", "tb")."""
+    if unit in {"b", "bytes"}:
+        return sz
+    elif unit in {"kb", "kilobytes"}:
+        return sz / 1024
+    elif unit in {"mb", "megabytes"}:
+        return sz / 1024**2
+    elif unit in {"gb", "gigabytes"}:
+        return sz / 1024**3
+    else:
+        raise ValueError(
+            f"`unit` must be one of {{'b', 'kb', 'mb', 'gb', 'tb'}}, got {unit!r}"
+        )
+
+
+if __name__ == "__name__":
+
+    @dataclass
+    class Example:
+        boolish: bool = True
+
+        @to_async
+        def hellower(self) -> None:
+            print("Hello!")
+
+        @property
+        def boolbool(self):
+            return self.boolish
+
+    async def test():
+        e: Example = Example()
+        await e.hellower()
+
+    asyncio.run(test())
