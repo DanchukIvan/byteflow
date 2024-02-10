@@ -1,627 +1,301 @@
-import importlib
-import os.path
-import platform
-from abc import ABC, abstractmethod
-from datetime import datetime
-from io import BytesIO
-from itertools import filterfalse
-from typing import ClassVar, NewType, TypedDict
+import contextlib
+import copy
+from abc import abstractmethod
+from asyncio import Task, create_task, gather, wait_for
+from collections.abc import AsyncGenerator, Callable, Iterable
+from dataclasses import KW_ONLY, dataclass, field
+from functools import partial
+from pathlib import Path
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    NoReturn,
+    ParamSpec,
+    Self,
+    TypeAlias,
+    TypeVar,
+    overload,
+)
 
-import pandas as pd
-import polars as pl
-import pyarrow as pa
-from attrs import asdict, define, field, fields, validators
-from fsspec import AbstractFileSystem, available_protocols, filesystem
-from fsspec.caching import caches
-from fsspec.implementations.cached import SimpleCacheFileSystem
-from fsspec.implementations.memory import MemoryFile, MemoryFileSystem
-from fsspec.spec import AbstractBufferedFile
-from fsspec.transaction import Transaction
-from sqlalchemy import Engine, create_engine, text
+from fsspec import get_filesystem_class
+from fsspec.asyn import AsyncFileSystem
+from more_itertools import first
 
-import base
-from helpers import to_async
-from repo_utils_io import ReadHandler, WriteHandler
+from base import YassCore
+from exceptions import EndOfResource
 
-
-def set_path_module():
-    if platform.system() == "Windows":
-        # from pathlib import WindowsPath
-        pathlib = importlib.import_module("pathlib", "WindowsPath")
-        path_class = getattr(pathlib, "WindowsPath", None)
-    elif platform.system() == "Linux":
-        # from pathlib import PosixPath
-        pathlib = importlib.import_module("pathlib")
-        path_class = getattr(pathlib, "PosixPath", None)
-    return path_class
+P = ParamSpec("P")
+V = TypeVar("V", bound=AsyncFileSystem)
+StorageFabric: TypeAlias = Callable[P, V]
 
 
-@define(slots=False)
-class Repo(ABC, base.YassService):
-    output_format: str = field()
+inited_engine_map: dict[str, AsyncFileSystem] = {}
 
+
+# TODO: фабрика движков хранилища fsspec и собственных движков
+def create_storage_engine(
+    proto: str, *, engine_kwargs: dict[str, Any]
+) -> AsyncFileSystem:
+    _storage: StorageFabric = get_filesystem_class(proto)
+    if not issubclass(_storage, AsyncFileSystem):
+        raise RuntimeError from None
+    engine = _storage(**engine_kwargs)
+    return engine
+
+
+from contentio import DataProxyProto, deserialize, io_context_map, serialize
+
+if TYPE_CHECKING:
+    from contentio import _IOContext
+
+
+# TODO: базовый класс Репо. Он наследует от YassCore
+class Repo(YassCore):
     @abstractmethod
-    def create(self, object):
-        pass
-
-    @abstractmethod
-    def delete(self):
-        pass
-
-    @abstractmethod
-    def read(self, object):
-        pass
-
-    @abstractmethod
-    def write(self, object):
-        pass
-
-    def __init_subclass__(cls, repo_type):
-        super().__init_subclass__(repo_type)
-        # if repo_type is None:
-        #     raise ValueError(
-        #         "У подклассов Repo обязательно должен быть указан тип хранилища для регистрации в фабрике классов"
-        #     )
-        # repos_registry[repo_type] = cls
-
-
-FileSystem = NewType("FileSystem", AbstractFileSystem)
-
-# TODO: нужно сделать буфер подходящим под структурированные объекты (словари, csv-файлы, avro-файлы и другие)
-# TODO: выбор типа файла будет осуществлять в скрапере
-# TODO: нужно сделать подходящий миксин для выгрузок данных в любом формате. Скорее прослойкой будет пандас.
-# TODO: нужно переписать все методы - учитывая, что грузим мы дикты, нужно их корректно обрабатывать
-# а это можно сделать только с помощью pandas или другой библиотеки, заточенной под табличный формат.
-
-import dataclasses
-
-
-@dataclasses.dataclass
-class RepoBuffer:
-    mem_size: int = dataclasses.field(default=100)
-    internal_buffer_map: dict[str, pl.DataFrame] = dataclasses.field(
-        default_factory=dict, repr=False
-    )
-    # engine: FileSystem = dataclasses.field(default=None, repr=False)
-    # cursor: str = dataclasses.field(init=False, default="", repr=False)
-    deduplicated_hash: set = dataclasses.field(
-        init=False, repr=False, default_factory=set
-    )
-    repo: "Repo" = dataclasses.field(default=None)
-    context: dict = dataclasses.field(default=None)
-    write_handler: ClassVar["WriteHandler"] = WriteHandler()
-    read_handler: ClassVar["ReadHandler"] = ReadHandler()
-
-    def __get__(self, instance, owner=None):
-        if self.repo is None and instance is not None:
-            self.repo = instance
-            self.context = self.repo.context
-            self.mem_size = instance.max_memory_size
-        return self
-
-    async def pull_data(self, dataframe: pl.DataFrame):
-        # TODO: нужно в функции проверки строк реализовать замену типа null на in
-        dedup_data = self.check_rows(dataframe)
-        final_data = self.insert_metadata(dedup_data)
-        if self.repo.cursor not in self.internal_buffer_map:
-            self.internal_buffer_map[self.repo.cursor] = final_data
-            internal_df = final_data
-        else:
-            internal_df = self.internal_buffer_map[self.repo.cursor]
-        internal_df = internal_df.extend(final_data)
-        if internal_df.estimated_size() > self.mem_size:
-            await self.merge_to_backend()
-
-    async def merge_to_backend(self):
-        path = self.repo.cursor
-        engine = self.repo.engine
-        chunk_of_new_data = self.internal_buffer_map[path]
-        print(f"Schema of new data is {chunk_of_new_data.schema}")
-        storage_data = await engine._cat(path)
-        if len(storage_data) > 0:
-            backend_fmt = self.repo.output_format
-            backend_data, _ = self.read_handler.handle(
-                storage_data,
-                overload=backend_fmt,
-                need_schema=False,
-                schema=chunk_of_new_data.schema,
-            )
-            print(f"Schema of backend data is {backend_data.schema}")
-            # TODO: мы здесь можем просто сджойнить датасеты по непересекающемуся множеству хэшей
-            backend_data: pl.DataFrame = backend_data.extend(chunk_of_new_data)
-            print(
-                f"Backend data before filtering duplicates is {backend_data.shape}"
-            )
-            estimate_columns = backend_data.select(
-                pl.exclude(["created_at", "city"])
-            ).columns
-            backend_data = backend_data.unique(
-                subset=estimate_columns, keep="first"
-            )
-            print(
-                f"Backend data after filtering duplicates is {backend_data.shape}"
-            )
-        else:
-            backend_data = chunk_of_new_data
-        file = BytesIO()
-        self.write_handler.handle(backend_data, file)
-        file.seek(0)
-        await engine._pipe_file(path, file.getvalue())
-        return backend_data
-
-    def insert_metadata(self, dataframe: "pl.DataFrame"):
-        updated_data = dataframe.with_columns(
-            pl.lit(datetime.now(), pl.Datetime).alias("created_at")
-        )
-        return updated_data
-
-    def check_rows(self, dataframe: "pl.DataFrame"):
-        for field, dtype in dataframe.schema.items():
-            if dtype == pl.Null:
-                print(f"Field {field} is null, changed to Int64")
-                dataframe = dataframe.cast({field: pl.Int64})
-                print(f"Dataschema now is {dataframe.schema}")
-        dataframe = dataframe.fill_null(0)
-        uniq_df = dataframe.filter(dataframe.is_unique())
-        return uniq_df
-
-
-def mb_converter(number):
-    if number > 0:
-        return number * (2**20)
-    else:
-        raise ValueError("Буфер памяти в мегабайтах должен быть больше нуля")
-
-
-int_validator = validators.instance_of(int)
-
-
-@define(slots=False, auto_attribs=True)
-class NetworkRepo(Repo, repo_type="network"):
-    network_fs: str = field(default="s3")
-    engine_kwargs: dict = field(default={})
-    cursor: str = field(default="")
-    repo_buffer: ClassVar[RepoBuffer] = RepoBuffer()
-    max_memory_size: int = field(
-        default=5, converter=mb_converter, validator=int_validator
-    )
-    available_repos: ClassVar[list[str]] = [
-        "dropbox",
-        "http",
-        "https",
-        "gcs",
-        "gs",
-        "gdrive",
-        "sftp",
-        "ssh",
-        "ftp",
-        "hdfs",
-        "arrow_hdfs",
-        "webhdfs",
-        "s3",
-        "s3a",
-        "wandb",
-        "oci",
-        "ocilake",
-        "adl",
-        "abfs",
-        "az",
-        "dask",
-        "dbfs",
-        "github",
-        "git",
-        "smb",
-        "jupyter",
-        "jlab",
-        "libarchive",
-        "oss",
-        "webdav",
-        "dvc",
-        "hf",
-        "box",
-        "lakefs",
-    ]
-    engine: FileSystem = field(init=False)
-    session: str | None = field(default=None)
-
-    def __attrs_post_init__(self):
-        self.__build_engine()
-
-    def __build_engine(self):
-        if self.network_fs in self.available_repos:
-            target_option = {"use_listings_cache": True} | self.engine_kwargs
-            fs = filesystem(self.network_fs, **target_option)
-            self.engine = fs
-            print(f"Build engine on {fs}")
-        else:
-            raise ValueError(
-                "Указанный протокол не входит в список поддерживаемых сетевых протоколов"
-            )
-
-    def rebuild_engine(self, kwargs):
-        self.engine_kwargs.update(kwargs)
-        self.__build_engine()
-
-    async def create(self, filepath):
-        bucket, _ = os.path.split(filepath)
-        try:
-            await self.mk_dir(bucket)
-        except FileExistsError:
-            print(f"Folder {bucket} is exists")
-            await self.engine._touch(filepath)
-        self.cursor = filepath
-
-    async def write(self, data, filepath=""):
-        filepath = f"{filepath}" or self.cursor
-        self.cursor = filepath
-        if not await self.engine._exists(filepath):
-            await self.create(filepath)
-        await self.repo_buffer.pull_data(data)
-
-    async def read(self):
+    def put(self, content: Iterable[bytes]) -> None:
         ...
 
-    async def read_from_backend(self, filepath="", with_update=False):
-        filepath = f"{filepath}" or self.cursor
-        self.cursor = filepath
-        if not await self.engine._exists(filepath):
-            await self.create(filepath)
-            data = b""
+    @abstractmethod
+    def merge_to_backend(self):
+        ...
+
+
+@dataclass
+class ContextBindingMixin:
+    engine_set: dict = field(default_factory=dict)
+
+    @abstractmethod
+    async def set_session(self):
+        ...
+
+    @classmethod
+    async def start_session(cls, engine: AsyncFileSystem) -> None | NoReturn:
+        coro: Task = create_task(engine.set_session())
+        await coro
+        if coro.exception() is None:
+            cls.active_session = True
         else:
-            if with_update:
-                data = await self.repo_buffer.merge_to_backend()
-            else:
-                data = await self.engine._cat(filepath)
-            print("File is not existed - upload data from storage")
-        return data
+            raise coro.exception()
 
-    read = read_from_backend
+    def get_engine(self, proto: str, *, engine_kwargs) -> AsyncFileSystem:
+        return create_storage_engine(proto, engine_kwargs=engine_kwargs)
 
-    async def read_from_buf(self, filepath=""):
-        filepath = f"{filepath}" or self.cursor
-        self.cursor = filepath
-        proxy_df = self.repo_buffer.internal_buffer_map[self.cursor]
-        # TODO: нужно сделать выбор формата, в котором будет формироваться вывод
-
-        return proxy_df.internal_df
-
-    async def delete(self, filepath, recursive=False):
+    @contextlib.asynccontextmanager
+    async def start_stream(self, target: object) -> AsyncGenerator[Self, Any]:
         try:
-            await self.engine._rm(filepath, recursive=recursive)
-        except FileNotFoundError:
-            print(f"Not such file {filepath} in backend")
-
-    async def ls_paths(self, path=""):
-        path = path if path else os.path.dirname(self.cursor)
-        ls = await self.engine._ls(f"{path}/", detail=False)
-        return ls
-
-    async def mk_dir(self, path):
-        path = os.path.dirname(path) if path else os.path.dirname(self.cursor)
-        await self.engine._mkdir(path)
-        print(f"Created new file {path}!")
-
-    async def __aenter__(self):
-        await self.make_session()
-        return self
-
-    async def make_session(self):
-        if not self.session:
-            session = await self.engine.set_session()
-            self.session = session
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        print("Close connection to repo")
-        await self.repo_buffer.merge_to_backend()
-        # FIXME: нативно в s3fs сессия после закрытия не открывается заново в движке s3. Нужно вручную открывать сессию
-        # Aibotocore3 и прокидывать ее в движок на этапе его создания. Но тогда сломается интерфейс...
-        # Пока сессия будет оставаться открытой до конца работы приложения.
-        # await self.session.close()
-
-
-@define(slots=False)
-class LocalRepo(Repo, repo_type="local"):
-    local_fs: str = field(init=False, default="asynclocal")
-    available_repos: ClassVar[list[str]] = ["asynclocal"]
-    cursor: str = field(default="")
-    opened_fd: dict[str, MemoryFile] = field(default={})
-    max_memory_size: int = field(
-        default=5, converter=mb_converter, validator=int_validator
-    )
-    engine: FileSystem = field(init=False)
-    engine_kwargs: dict = field(default={})
-
-    def __attrs_post_init__(self):
-        if self.output_format in self.io_mapper.keys():
-            self.io_tool = self.io_mapper[self.output_format]
-            self.__build_engine()
-        else:
-            raise ValueError(
-                f"Формат файлов {self.output_format} не поддерживается"
-            )
-
-    def __build_engine(self):
-        if self.local_fs in self.available_repos:
-            target_option = {"use_listings_cache": True} | self.engine_kwargs
-            fs = filesystem(self.local_fs, **target_option)
-            self.engine = fs
-            print(f"Build engine on {fs}")
-        else:
-            raise ValueError(
-                "Указанный протокол не входит в список поддерживаемых локальных протоколов"
-            )
-
-    def rebuild_engine(self, kwargs):
-        self.engine_kwargs.update(kwargs)
-        self.__build_engine()
-
-    async def create(self, filepath):
-        await self.engine._touch(filepath)
-        self.opened_fd[filepath] = MemoryFile()
-        self.cursor = filepath
-        print("Created new file!")
-
-    async def write(self, data, filepath=""):
-        filepath = filepath or self.cursor
-        self.cursor = filepath
-        if not await self.engine._exists(filepath):
-            await self.create(filepath)
-        elif filepath not in self.opened_fd.keys():
-            self.opened_fd[filepath] = MemoryFile()
-        prepared_data = self.io_tool(data)
-        self.opened_fd[filepath].writelines(prepared_data)
-        await self.flush(filepath)
-
-    async def flush(self, filepath="", force=False, updating=False):
-        buffer = self.opened_fd[filepath]
-        if (buffer.size >= self.max_memory_size) or (
-            force or updating and buffer.size > 0
-        ):
-            # TODO: нам бы сюда пихнуть валидацию на повторяющиеся строки
-            storaged_data = await self.engine._cat(filepath)
-            delta = set(BytesIO(storaged_data)).symmetric_difference(buffer)
-            if delta is not None and delta:
-                delta_buf = BytesIO()
-                delta_buf.writelines(delta)
-                storaged_data += delta_buf.getvalue()
-            if force:
-                print("Will flushed in force mode")
-            elif updating:
-                print(
-                    "Flushing run in update mode - buffer and backend data are not modified"
+            ctx_set: list[_IOContext] = io_context_map[id(target)]
+            self.ctx_set: list[_IOContext] = ctx_set
+            for ctx in self.ctx_set:
+                self.engine_set[id(ctx)] = self.get_engine(
+                    ctx.storage_proto, engine_kwargs=ctx.storage_kwargs
                 )
-                return storaged_data
-            await self.engine._pipe_file(filepath, storaged_data)
-            self.opened_fd[filepath] = MemoryFile()
-            return
-        print(f"Size of buffer is {buffer.size}, flushing not run")
+                await gather(
+                    *[
+                        self.start_session(engine)
+                        for engine in self.engine_set.values()
+                    ]
+                )
+            yield self
+        except KeyError:
+            raise RuntimeError(
+                "Контекст ввода-вывода для данного объекта не определен"
+            )
 
-    def prepare_to_flush(self, filepath):
-        filepath = filepath or self.cursor
-        dirname = os.path.dirname(filepath)
-        filename = os.path.basename(filepath)
-        return dirname, filename
 
-    async def read(self):
+T = TypeVar("T", bound=object, covariant=True)
+
+
+async def upload(engine: AsyncFileSystem, content: bytes, path: str) -> None:
+    await engine._pipe_file(path, content)
+
+
+async def download(engine: AsyncFileSystem, path: str):
+    content = await engine._cat(path)
+    return content
+
+
+async def read(engine: AsyncFileSystem, path: str) -> DataProxyProto:
+    content = await download(engine, path)
+    extension: str = Path(path).suffix.lstrip(".")
+    dataobj = datatype_registry[extension](content)
+    return dataobj
+
+
+async def mk_path(engine: AsyncFileSystem, path: str):
+    try:
+        await engine._mkdir(Path(path).parts[0])
+    except FileExistsError:
+        await engine._touch(path)
+
+
+async def check_path(
+    engine: AsyncFileSystem, path: str, *, autocreate: bool = True
+):
+    status: bool = await engine._exists(path)
+    if (res := not status) and autocreate:
+        await mk_path(engine, path)
+        return res
+    else:
+        return status
+
+
+from asyncio import Future
+from collections import defaultdict
+from dataclasses import dataclass, field
+from functools import partial
+
+if TYPE_CHECKING:
+    from contentio import DataProcPipeline, DataProxyProto
+
+from threading import Lock
+
+SHARED_LOCK = Lock()
+
+from contentio import _IOContext, datatype_registry
+from helpers import scale_bytes
+
+
+class EORTrigger:
+    def __init__(self):
+        self._default: int | float = 0
+
+    @overload
+    def __get__(self, instance: None, owner: type) -> Self:
         ...
 
-    async def read_from_backend(self, filepath="", with_update=False):
-        filepath = filepath or self.cursor
-        self.cursor = filepath
-        if not await self.engine._exists(filepath):
-            await self.create(filepath)
-            data = b""
+    @overload
+    def __get__(self, instance: object, owner: None) -> float:
+        ...
+
+    @overload
+    def __get__(self, instance: object, owner: None) -> int:
+        ...
+
+    def __get__(
+        self, instance: object | None, owner: type | None = None
+    ) -> Self | float | int:
+        if instance is None:
+            return self
+        return scale_bytes(self._default, "mb")
+
+    @overload
+    def __set__(self, instance: object, value: int) -> int | None:
+        ...
+
+    @overload
+    def __set__(self, instance: object, value: float) -> float | None:
+        ...
+
+    def __set__(
+        self, instance: object, value: int | float
+    ) -> int | float | None:
+        if value == 0:
+            raise EndOfResource
         else:
-            if with_update:
-                data = await self.flush(filepath, updating=True)
-            else:
-                data = await self.engine._cat(filepath)
-            print("File is not existed - upload data from storage")
-        return data
+            self._default = self._default + value
 
-    read = read_from_backend
-
-    async def read_from_buf(self, filepath="", with_stored_data=False):
-        filepath = filepath or self.cursor
-        self.cursor = filepath
-        if buffer := self.opened_fd.get(self.cursor, False):
-            if buffer.size > 0 and not with_stored_data:
-                data = buffer.getvalue()
-                print("File is existed - upload data from buffer")
-                return data
-        elif with_stored_data:
-            print(
-                "Upload data from backend for display actuall data with buffered changes"
-            )
-            return await self.read_from_backend(filepath, with_update=True)
-        else:
-            print("Nothing in buffer")
-            return b""
-
-    async def delete(self, filepath, recursive=False):
-        await self.engine._rm(filepath, recursive=recursive)
-        if self.opened_fd.get(filepath, False):
-            del self.opened_fd[filepath]
-
-    async def ls_paths(self, path=""):
-        path = os.path.dirname(path) if path else os.path.dirname(self.cursor)
-        ls = await self.engine._ls(f"{path}/", detail=False)
-        return ls
-
-    async def mk_dir(self, path):
-        path = os.path.dirname(path) if path else os.path.dirname(self.cursor)
-        # TODO: нужно что-то придумать вместо вот такого вот патча, нарушающего общий интерфейс
-        try:
-            await self.engine._mkdir(path)
-        except FileExistsError:
-            print("Dir is exist yet")
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.on_exit()
-
-    async def on_exit(self):
-        for filepath in self.opened_fd.keys():
-            await self.flush(filepath, force=True)
-        for file in self.opened_fd.values():
-            del file
+    def reset_counter(self):
+        self._default = 0
 
 
-# TODO: нужно сделать собственный подкласс, чтобы к ключам можно было обращаться как к аттрибутам
-class TableMetadata(TypedDict):
-    last_commit: datetime | None
-    size: int
+WrappedContent = DataProxyProto[Any] | Future[Any] | bytes
+ContentSet = tuple[tuple[str, WrappedContent], ...]
+empty_func = lambda x: x
 
 
-class TableMapping(TypedDict):
-    name: str
-    meta: TableMetadata
-
-
-@define(slots=False)
-class SqlRepo(Repo, repo_type="sql"):
-    connection_string: str = field()
-    cursor: str = field(default="")
-    table_mapping: TableMapping = field(default=TableMapping)
-    memo_buffer = field(default=create_engine("duckdb:///:memory:"))
-    max_memory_size: int = field(
-        default=5, converter=mb_converter, validator=int_validator
+@dataclass
+class ContentManager:
+    _: KW_ONLY
+    max_alloc_mem: int | float = field(default=10)
+    mem_alloc: int | float = field(default=0)
+    queques: dict[int, dict[str, DataProxyProto | Future]] = field(
+        default_factory=partial(defaultdict, dict)
     )
-    engine: Engine = field(init=False)
-    engine_kwargs: dict = field(default={})
-    option_kwargs: dict = field(default={})
+    ctx_set: list[_IOContext] = field(default_factory=list)
+    target_id: int = field(default=0)
 
-    def __attrs_post_init__(self):
-        self.__build_engine()
-
-    def __build_engine(self):
-        engine = create_engine(
-            self.connection_string,
-            connect_args=self.engine_kwargs,
-            **self.option_kwargs,
-        )
-        self.engine = engine
-        self.engine
-
-    def rebuild_engine(self, option_args, connect_args=None):
-        if connect_args:
-            self.engine_kwargs.update(connect_args)
-        self.option_kwargs.update(option_args)
-        self.__build_engine()
-
-    async def __aenter__(self):
-        return self
-
-    def create(self, tablename):
-        self.table_mapping[tablename] = TableMetadata(
-            last_commit=datetime.now(), size=0
-        )
-        self.cursor = tablename
-        print("Created table! Now its in memory buffer")
-
-    @to_async
-    def write(self, data, tablename=""):
-        tablename = tablename or self.cursor
-        self.cursor = tablename
-        if not self.exists(tablename):
-            self.create(tablename)
-        df = pd.DataFrame.from_records(data)
-        df.to_sql(tablename, self.memo_buffer)
-        self.table_mapping[tablename]["size"] += sum(
-            df.memory_usage(deep=True)
-        )
-        self.flush(tablename)
-
-    def exists(self, tablename):
-        with self.engine.connect() as connection:
-            pd.read_sql_table(tablename, connection)
-            return True
-        return False
-
-    def flush(self, tablename="", force=False, updating=False):
-        table_meta = self.table_mapping[tablename]
-        last_commit = table_meta["last_commit"]
-        table_size = table_meta["size"]
-        if table_size >= self.max_memory_size or (
-            force or updating and table_size > 0
-        ):
-            with self.engine.connect() as connection:
-                db_data = pd.read_sql_table(tablename, connection)
-                buf_data = pd.read_sql_table(tablename, self.memo_buffer)[
-                    buf_data["created_at"] > last_commit
-                ]
-                storaged_data = pd.concat([db_data, buf_data])
-                if force:
-                    print(
-                        "Will flushed in force mode - backend data will be modified and buffer cleared"
-                    )
-                elif updating:
-                    print(
-                        "Flushing run in update mode - buffer and backend data are not modified"
-                    )
-                    return storaged_data
-                buf_data.to_sql(tablename, connection)
-                table_meta["size"] = 0
-                table_meta["last_commit"] = datetime.now()
-                return
-        print(f"Size of buffer is {table_size}, flushing not run")
-
-    def read(self):
-        ...
-
-    @to_async
-    def read_from_backend(self, tablename="", with_update=False):
-        tablename = tablename or self.cursor
-        self.cursor = tablename
-        if not self.exists(tablename):
-            self.create(tablename)
-            data = ""
-        else:
-            if with_update:
-                data = self.flush(tablename, updating=True)
+    async def save(self, content: bytes):
+        for io_ctx in self.ctx_set:
+            queue = self.queques[id(io_ctx)]
+            path = io_ctx.out_path
+            in_fmt = io_ctx.in_format
+            data: Future[Any] | DataProxyProto = deserialize(content, in_fmt)
+            pipeline: DataProcPipeline | None = io_ctx.pipeline
+            if pipeline:
+                checked_data = pipeline.eor_checker(data)
+                future = pipeline.run_transform(checked_data)
+                processed_data = await wait_for(future, pipeline.timeout)
             else:
-                data = pd.read_sql_table(tablename, self.memo_buffer)
-            print("File is not existed - upload data from storage")
-        return data
+                processed_data = data
+            print(f"Memory buffer size is {self.mem_alloc}")
+            queue[path] = processed_data
+        self._recalc_mem_alloc()
 
-    read = read_from_backend
-
-    @to_async
-    def read_from_buf(self, tablename="", with_stored_data=False):
-        tablename = tablename or self.cursor
-        self.cursor = tablename
-        if self.table_mapping[tablename] and not with_stored_data:
-            data = pd.read_sql_table(tablename, self.memo_buffer)
-            return data
-        elif with_stored_data:
-            print(
-                "Upload data from backend for display actuall data with buffered changes"
+    def _recalc_mem_alloc(self):
+        mem_alloc: int | float = 0
+        for ctx in self.ctx_set:
+            mem_alloc += sum(
+                len(serialize(data, ctx.out_format))
+                for data in self.queques[id(ctx)].values()
             )
-            return self.read_from_backend(tablename, with_update=True)
-        else:
-            print("Nothing in buffer")
-            return ""
+        self.mem_alloc = scale_bytes(mem_alloc, "mb")
 
-    def delete(self, tablename, only_buffer=False):
-        drop_stm = text(f"DROP TABLE {tablename}")
-        with self.engine.connect() as db_conn, self.memo_buffer.connect() as bf_conn:
-            bf_conn.execute(drop_stm)
-            if only_buffer:
-                return
-            db_conn.execute(drop_stm)
-            del self.table_mapping[tablename]
+    def get_content(self, path: str) -> DataProxyProto | Future | None:
+        for queue in self.queques.values():
+            if path in queue.values():
+                return queue[path]
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        self.on_exit()
+    async def get_all_content(self, ctx: _IOContext) -> ContentSet:
+        ctx_id: int = id(ctx)
+        # TODO: тут нужен асинхронный лок для общей очереди, вообще нужен лок при обращении к разделяемым ресурсам и переменным.
+        # TODO: лок у каждого экземпляра будет свой.
+        target_queue: dict[str, DataProxyProto | Future] = copy.deepcopy(
+            self.queques[ctx_id]
+        )
+        self.queques[ctx_id].clear()
+        self._recalc_mem_alloc()
+        print(f"Memory buffer size is {self.mem_alloc}")
+        res: ContentSet = tuple(
+            (path, dataobj)
+            for path, dataobj in target_queue.items()
+            if not isinstance(dataobj, Exception)
+        )
+        return res
 
-    @to_async
-    def on_exit(self):
-        for table in self.table_mapping.keys():
-            self.delete(table, only_buffer=True)
+    @property
+    def input_set(self) -> list[str]:
+        return [ctx.in_format for ctx in self.ctx_set]
+
+    @property
+    def output_set(self) -> list[str]:
+        return [ctx.out_format for ctx in self.ctx_set]
+
+    @property
+    def binded_targets(self) -> list[_IOContext]:
+        return self.ctx_set
+
+
+@dataclass
+class RepoManager(
+    Repo, ContextBindingMixin, ContentManager, subcls_key="repo_manager"
+):
+    async def put(self, content: list[bytes]) -> None:
+        print("Saving content")
+        await gather(*[self.save(cbytes) for cbytes in content])
+        if self.mem_alloc > self.max_alloc_mem:
+            create_task(self.merge_to_backend())
+
+    async def merge_to_backend(self) -> None:
+        print(f"Start merging to backend")
+        for ctx in self.ctx_set:
+            for path, buffer in await self.get_all_content(ctx):
+                self.engine = self.engine_set[id(ctx)]
+                if not await check_path(self.engine, path):
+                    await mk_path(self.engine, path)
+                await upload(
+                    self.engine, serialize(buffer, ctx.out_format), path
+                )  # type:ignore
 
 
 if __name__ == "__main__":
-    path = "bucket/folder/file.txt"
-    print(os.path.split(path))
+    ...
