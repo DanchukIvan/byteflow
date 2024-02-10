@@ -33,30 +33,27 @@ playwright = "*"
 # uvloop = "*"
 pandas = {version = ">=2.0", extras = ['pyarrow']}
 polars = {version = "^0.19.0", extras = ["pyarrow"]}
-httpx = "^0.24.1"
-attrs = "^23.1.0"
 aioboto3 = {version = "^11.3.0", extras = ["boto3"]}
 pre-commit = "^3.4.0"
 more-itertools = "*"
 orjson = "^3.9.7"
 regex = "^2023.8.8"
-fake-useragent = "^1.2.1"
-pydeps = "^1.12.17"
 morefs = {extras = ["asynclocal"], version = "^0.1.2"}
 fsspec = "^2023.10.0"
-sqlalchemy = "^2.0.23"
 aioitertools = "^0.11.0"
-duckdb = "^0.9.2"
-duckdb-engine = "^0.9.2"
 s3fs = "^2023.12.0"
-python-magic-bin = "^0.4.14"
 dotted-dict = "^1.1.3"
+mypy = "^1.8.0"
+aiohttp = "^3.9.1"
+yarl = "^1.9.4"
+beartype = "^0.16.4"
+hatch = "^1.9.3"
+openpyxl = "^3.1.2"
 
 [tool.poetry.group.dev]
 
 [tool.poetry.group.dev.dependencies]
 dynaconf = "*"
-commitizen = "^3.10.0"
 
 [tool.poetry.group.docs]
 optional = true
