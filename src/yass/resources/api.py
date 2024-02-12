@@ -1,4 +1,3 @@
-from abc import abstractmethod
 from collections import defaultdict
 from collections.abc import (
     AsyncGenerator,
@@ -7,7 +6,6 @@ from collections.abc import (
     Iterable,
     Iterator,
 )
-from contextlib import suppress
 from dataclasses import dataclass, field
 from functools import partial
 from itertools import zip_longest
@@ -15,11 +13,11 @@ from typing import Any, NoReturn, Self, overload
 
 from aioitertools.itertools import product as async_product
 
-from base import YassCore
+from .base import BaseResource
 
 
 @dataclass
-class ResourceRequest:
+class ApiRequest:
     part_name: str = field()
     persist_fields: dict[str, str] = field(default_factory=dict)
     mutable_fields: dict[str, list] = field(
@@ -97,57 +95,37 @@ class ResourceRequest:
 
 
 @dataclass
-class Resource(YassCore):
-    url: str
-    current_query: ResourceRequest | None = field(default=None)
-    queries: dict[str, ResourceRequest] = field(default_factory=dict)
-    _next_url: bool = field(default=False)
-    max_pages: int = field(default=100, kw_only=True)
-
-    @abstractmethod
-    async def gen_url_for(
-        self: Self, query_name: str = ""
-    ) -> AsyncGenerator[str, None]:
-        ...
+class ApiResource(BaseResource, subcls_key="api"):
+    current_query: ApiRequest | None = field(default=None)
+    queries: dict[str, ApiRequest] = field(default_factory=dict)
 
     @overload
     def get_request(
         self, *, name: str, autocreate: bool = False
-    ) -> ResourceRequest | NoReturn:
+    ) -> ApiRequest | NoReturn:
         ...
 
     @overload
-    def get_request(
-        self, *, name: str, autocreate: bool = True
-    ) -> ResourceRequest:
+    def get_request(self, *, name: str, autocreate: bool = True) -> ApiRequest:
         ...
 
-    def get_request(
-        self, *, name: str, autocreate: bool = True
-    ) -> ResourceRequest:
+    def get_request(self, *, name: str, autocreate: bool = True) -> ApiRequest:
         try:
-            req: ResourceRequest = self.queries[name]
+            req: ApiRequest = self.queries[name]
             return req
         except KeyError as exc:
             if autocreate:
-                req = ResourceRequest(name)
+                req = ApiRequest(name)
                 self.queries[name] = req
                 return req
             else:
                 raise KeyError from exc
 
-    def page(self) -> Generator[int, Any, None]:
-        with suppress(GeneratorExit):
-            yield from range(self.max_pages)
-
-
-@dataclass
-class ApiResource(Resource, subcls_key="api"):
     async def gen_url_for(
         self, request_name: str = ""
     ) -> AsyncGenerator[str, None]:
         if request_name:
-            queries: list[ResourceRequest] = [
+            queries: list[ApiRequest] = [
                 q for q in self.queries.values() if q.part_name == request_name
             ]
         else:

@@ -1,16 +1,14 @@
 from asyncio import FIRST_COMPLETED, Task, create_task, run, wait
-from collections import defaultdict
 from dataclasses import dataclass, field
-from itertools import chain
-from typing import ClassVar, Literal
+from typing import Literal
 
 from scrapers import ApiScraper
-from triggers import conditions_instances
+
+from .scheduling.triggers import ACTIVE_CONDITIONS
 
 
 @dataclass
 class Yass:
-    attr_mapping: ClassVar[dict] = field(default=defaultdict(list))
     lookup_interval: int = field(default=600)
 
     def make_crawl(self, url: str, *, crawl_type: Literal["api", "raw"]):
@@ -25,7 +23,7 @@ class Yass:
     async def _run_coros(self) -> None:
         # Мы запускаем все триггеры на ожидание в конкрутентом исполнении и рекурсивно их перезапускаем
         awaiting_tasks = {
-            create_task(cond.pending()) for cond in conditions_instances.keys()
+            create_task(cond.pending()) for cond in ACTIVE_CONDITIONS.keys()
         }
         while awaiting_tasks:
             done, pending = await wait(
@@ -38,10 +36,8 @@ class Yass:
             for task in done:
                 if task.exception() is None:
                     key = task.result()
-                    if key in conditions_instances.keys():
-                        callback: Task = create_task(
-                            conditions_instances[key]()
-                        )
+                    if key in ACTIVE_CONDITIONS.keys():
+                        callback: Task = create_task(ACTIVE_CONDITIONS[key]())
                         print(f"Triggered callback is {callback}")
                         awaiting_tasks.add(callback)
                         print(f"Awaiting tasks is {awaiting_tasks}")

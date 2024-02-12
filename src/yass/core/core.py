@@ -20,7 +20,7 @@ from typing import (
     overload,
 )
 
-__all__ = ["YassCore", "NOCONVERTATTR"]
+__all__ = ["YassCore", "YassMeta"]
 
 TYassClass = TypeVar("TYassClass", covariant=True)
 PYassClass = ParamSpec("PYassClass")
@@ -90,7 +90,7 @@ def _configure_attrs(attr_type: type) -> tuple[Any, Any]:
 iterable_handlers: dict[type, Callable] = {}
 
 
-def iter_handler(container_type: type[Iterable]) -> Callable[..., Any]:
+def _iter_handler(container_type: type[Iterable]) -> Callable[..., Any]:
     def registration(func: Callable) -> Callable:
         iterable_handlers[container_type] = func
         return func
@@ -98,10 +98,10 @@ def iter_handler(container_type: type[Iterable]) -> Callable[..., Any]:
     return registration
 
 
-iter_handler(list)(lambda _list, value: _list.append(value))
-iter_handler(dict)(lambda _dict, key, value: _dict.update({key: value}))
-iter_handler(set)(lambda _set, value: _set.add(value))
-iter_handler(tuple)(lambda _tuple, value: _tuple + (value,))
+_iter_handler(list)(lambda _list, value: _list.append(value))
+_iter_handler(dict)(lambda _dict, key, value: _dict.update({key: value}))
+_iter_handler(set)(lambda _set, value: _set.add(value))
+_iter_handler(tuple)(lambda _tuple, value: _tuple + (value,))
 
 
 class NOCONVERT:
@@ -233,11 +233,6 @@ class YassMeta(type(Protocol), YassCoreMeta):
 class YassCore(metaclass=YassMeta):
     _: KW_ONLY
     _edit_mode: bool = False
-
-    @property
-    def set(self) -> Self:
-        self._edit_mode = True
-        return self
 
     @property
     def available_impl(self):

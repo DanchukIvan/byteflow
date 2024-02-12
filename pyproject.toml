@@ -1,18 +1,22 @@
 [build-system]
-requires=["hatchling"]
-build-backend="hatchling.build"
+requires = [
+    "hatchling",
+]
+build-backend = "hatchling.build"
 
 [project]
-name="yass"
-description="Yet Another Simple Scraper"
-requires-python=">=3.11"
-authors=[
-    {name="Danchuk Ivan", email="ivan.s.danchuk@gmail.com"},
-    {name="Ivan Danchuk", email="ivan.s.danchuk@gmail.com"},
-    {name="Your Name", email="you@example.com"},
+name = "yass"
+description = "Yet Another Simple Scraper"
+requires-python = ">=3.11"
+authors = [
+    { name = "Danchuk Ivan", email = "ivan.s.danchuk@gmail.com" },
+    { name = "Ivan Danchuk", email = "ivan.s.danchuk@gmail.com" },
+    { name = "Your Name", email = "you@example.com" },
 ]
-maintainers=[{name="Danchuk Ivan", email="ivan.s.danchuk@gmail.com"}]
-keywords=[
+maintainers = [
+    { name = "Danchuk Ivan", email = "ivan.s.danchuk@gmail.com" },
+]
+keywords = [
     "scraping",
     "web scraping",
     "asyncio",
@@ -20,7 +24,7 @@ keywords=[
     "api crawler",
     "api scraping",
 ]
-classifiers=[
+classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: Microsoft",
@@ -28,8 +32,8 @@ classifiers=[
     "Programming Language :: Python :: 3 :: Only",
     "Topic :: Software Development :: Libraries",
 ]
-version="0.1.0a1"
-dependencies=[
+version = "0.1.0a2"
+dependencies = [
     "aiohttp<4.0.0,>=3.9.3",
     "aioitertools<1.0.0,>=0.11.0",
     "asyncio",
@@ -46,19 +50,30 @@ dependencies=[
     "uvloop; platform_system == \"Linux\"",
     "yarl<2.0.0,>=1.9.4",
 ]
-readme="README.md"
+readme = "README.md"
 
 [project.license]
-text="Apache 2.0"
+text = "Apache 2.0"
 
 [tool.pdm]
-distribution=true
+distribution = true
 
 [tool.pdm.dev-dependencies]
-hook=["pre-commit<4.0.0,>=3.6.0"]
-dev=["dynaconf"]
-doc=["mkdocs-material>=9.5.9", "mkdocstrings[python]>=0.24.0"]
-test=["pytest", "pytest-mock", "pytest-playwright"]
+hook = [
+    "pre-commit<4.0.0,>=3.6.0",
+]
+dev = [
+    "dynaconf",
+]
+doc = [
+    "mkdocs-material>=9.5.9",
+    "mkdocstrings[python]>=0.24.0",
+]
+test = [
+    "pytest",
+    "pytest-mock",
+    "pytest-playwright",
+]
 
 [tool.pdm.build]
-includes=[]
+includes = []

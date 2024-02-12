@@ -2,7 +2,7 @@ import contextlib
 import copy
 from abc import abstractmethod
 from asyncio import Task, create_task, gather, wait_for
-from collections.abc import AsyncGenerator, Callable, Iterable
+from collections.abc import AsyncGenerator, Callable
 from dataclasses import KW_ONLY, dataclass, field
 from functools import partial
 from pathlib import Path
@@ -19,17 +19,23 @@ from typing import (
 
 from fsspec import get_filesystem_class
 from fsspec.asyn import AsyncFileSystem
-from more_itertools import first
 
-from base import YassCore
-from exceptions import EndOfResource
+from yass.exceptions.exceptions import EndOfResource
+
+from .base import BaseStorageManager
 
 P = ParamSpec("P")
 V = TypeVar("V", bound=AsyncFileSystem)
 StorageFabric: TypeAlias = Callable[P, V]
 
 
-inited_engine_map: dict[str, AsyncFileSystem] = {}
+from ..contentio import deserialize, serialize
+from ..contentio.common import *
+
+if TYPE_CHECKING:
+    from contentio import _IOContext
+
+__all__: list[str] = ["StorageManager"]
 
 
 # TODO: фабрика движков хранилища fsspec и собственных движков
@@ -43,21 +49,7 @@ def create_storage_engine(
     return engine
 
 
-from contentio import DataProxyProto, deserialize, io_context_map, serialize
-
-if TYPE_CHECKING:
-    from contentio import _IOContext
-
-
 # TODO: базовый класс Репо. Он наследует от YassCore
-class Repo(YassCore):
-    @abstractmethod
-    def put(self, content: Iterable[bytes]) -> None:
-        ...
-
-    @abstractmethod
-    def merge_to_backend(self):
-        ...
 
 
 @dataclass
@@ -83,7 +75,7 @@ class ContextBindingMixin:
     @contextlib.asynccontextmanager
     async def start_stream(self, target: object) -> AsyncGenerator[Self, Any]:
         try:
-            ctx_set: list[_IOContext] = io_context_map[id(target)]
+            ctx_set: list[_IOContext] = IOCONTEXT_MAP[id(target)]
             self.ctx_set: list[_IOContext] = ctx_set
             for ctx in self.ctx_set:
                 self.engine_set[id(ctx)] = self.get_engine(
@@ -109,15 +101,15 @@ async def upload(engine: AsyncFileSystem, content: bytes, path: str) -> None:
     await engine._pipe_file(path, content)
 
 
-async def download(engine: AsyncFileSystem, path: str):
-    content = await engine._cat(path)
+async def download(engine: AsyncFileSystem, path: str) -> bytes:
+    content: bytes = await engine._cat(path)  # type: ignore
     return content
 
 
-async def read(engine: AsyncFileSystem, path: str) -> DataProxyProto:
-    content = await download(engine, path)
+async def read(engine: AsyncFileSystem, path: str) -> Any:
+    content: bytes = await download(engine, path)
     extension: str = Path(path).suffix.lstrip(".")
-    dataobj = datatype_registry[extension](content)
+    dataobj = deserialize(content, extension)
     return dataobj
 
 
@@ -143,16 +135,12 @@ from asyncio import Future
 from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import partial
-
-if TYPE_CHECKING:
-    from contentio import DataProcPipeline, DataProxyProto
-
 from threading import Lock
 
 SHARED_LOCK = Lock()
 
-from contentio import _IOContext, datatype_registry
-from helpers import scale_bytes
+from ..contentio import DataProcPipeline, _IOContext
+from ..utils import scale_bytes
 
 
 class EORTrigger:
@@ -198,7 +186,7 @@ class EORTrigger:
         self._default = 0
 
 
-WrappedContent = DataProxyProto[Any] | Future[Any] | bytes
+WrappedContent = Any | Future[Any] | bytes
 ContentSet = tuple[tuple[str, WrappedContent], ...]
 empty_func = lambda x: x
 
@@ -208,7 +196,7 @@ class ContentManager:
     _: KW_ONLY
     max_alloc_mem: int | float = field(default=10)
     mem_alloc: int | float = field(default=0)
-    queques: dict[int, dict[str, DataProxyProto | Future]] = field(
+    queques: dict[int, dict[str, Any | Future]] = field(
         default_factory=partial(defaultdict, dict)
     )
     ctx_set: list[_IOContext] = field(default_factory=list)
@@ -219,7 +207,7 @@ class ContentManager:
             queue = self.queques[id(io_ctx)]
             path = io_ctx.out_path
             in_fmt = io_ctx.in_format
-            data: Future[Any] | DataProxyProto = deserialize(content, in_fmt)
+            data: Future[Any] | Any = deserialize(content, in_fmt)
             pipeline: DataProcPipeline | None = io_ctx.pipeline
             if pipeline:
                 checked_data = pipeline.eor_checker(data)
@@ -276,8 +264,11 @@ class ContentManager:
 
 
 @dataclass
-class RepoManager(
-    Repo, ContextBindingMixin, ContentManager, subcls_key="repo_manager"
+class StorageManager(
+    BaseStorageManager,
+    ContextBindingMixin,
+    ContentManager,
+    subcls_key="repo_manager",
 ):
     async def put(self, content: list[bytes]) -> None:
         print("Saving content")

@@ -1,152 +1,30 @@
-import ast
 from asyncio import to_thread
-from collections import defaultdict
-from collections.abc import Callable, Coroutine, Sequence
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field, is_dataclass, replace
 from functools import partial, reduce
-from importlib import import_module
-from inspect import BoundArguments, Parameter, Signature, signature
+from inspect import BoundArguments, Signature, signature
 from io import BytesIO
 from itertools import chain
 from pathlib import Path
 from pprint import pprint
-from typing import (
-    Any,
-    Generic,
-    Protocol,
-    Self,
-    TypeAlias,
-    TypeVar,
-    cast,
-    get_args,
-    get_origin,
-    get_overloads,
-    get_type_hints,
-)
+from typing import Any, Generic, Protocol, Self, TypeAlias, TypeVar, cast
 
 from fsspec.asyn import AsyncFileSystem
 
-input_map: dict[str, Callable] = {}
-output_map: dict[str, Callable] = {}
+from ._helpers import *
+from .common import *
 
-
-def _update_sign(func: Callable, extra_kwargs: dict) -> Callable:
-    if not extra_kwargs:
-        return func
-    sig: Signature = signature(func)
-    args: list[Any] = []
-    kwargs: dict[str, Any] = {}
-    new_params: list[Parameter] = []
-    for name, param in sig.parameters.items():
-        value: Any = extra_kwargs.get(name, param.default)
-        if param.kind in (
-            Parameter.POSITIONAL_ONLY,
-            Parameter.POSITIONAL_OR_KEYWORD,
-        ):
-            args.append(value)
-        else:
-            kwargs[name] = value
-        new_params.append(param.replace(name=name, default=value))
-    new_sig: Signature = sig.replace(parameters=new_params)
-    if kwdefault := getattr(func, "__kwdefaults__", False):
-        kwdefault.update(kwargs)
-        setattr(func, "__kwdefaults__", kwdefault)
-    elif default := getattr(func, "__defaults__", False):
-        default = tuple(args)
-        setattr(func, "__defaults__", default)
-    elif hasattr(func, "__signature__"):
-        func.__signature__ = new_sig
-    else:
-        func = partial(func, *args, **kwargs)
-    return func
-
-
-def _resolve_annotation(annotated: Any, module_name: str):
-    cnt_split = module_name.count(".")
-    if isinstance(annotated, str):
-        not_resolved = []
-        search_area = module_name
-        cnt_split = module_name.count(".")
-        annotations = annotated.split("|")
-        result = []
-        for annot in annotations:
-            loop_cnt = 0
-            while cnt_split >= loop_cnt:
-                annot = annot.strip()
-                try:
-                    import builtins
-                    import io
-                    import typing
-
-                    mod = import_module(search_area)
-                    typeclass = (
-                        getattr(mod, annot, False)
-                        or getattr(builtins, annot, False)
-                        or getattr(io, annot, False)
-                        or getattr(typing, annot, ast.literal_eval(annot))
-                    )
-                    if typeclass is not None:
-                        result.append(typeclass)
-                    break
-                except Exception:
-                    loop_cnt += 1
-                    search_area = search_area.rsplit(".", loop_cnt)[0]
-                    if loop_cnt > cnt_split:
-                        not_resolved.append(annot)
-        if not_resolved:
-            msg = f"Для разрешения аннотации, используемой в модуле {module_name}, необходимо импортировать следующие классы: {not_resolved}"
-            raise NameError(msg)
-        return tuple(result)
-    else:
-        return tuple(
-            t for t in [*get_args(annotated), get_origin(annotated)] if bool(t)
-        )
-
-
-_f: Callable[[type, Any, Parameter], bool] = (
-    lambda target_type, _types, param: issubclass(target_type, _types)
-    and param.kind
-    in (Parameter.POSITIONAL_ONLY, Parameter.POSITIONAL_OR_KEYWORD)
-)
-
-
-def _handle_generic(
-    param: Parameter, annotation: Any, target_type: type
-) -> bool:
-    if annotation is None or not annotation:
-        return False
-    status: bool = _f(target_type, annotation, param)
-    return status
-
-
-def _check_input_sig(func: Callable) -> bool:
-    overloads: Sequence[Callable] = get_overloads(func) or [func]
-    for overload_sign in overloads:
-        sig: Signature = signature(overload_sign)
-        param: Parameter = list(sig.parameters.values())[0]
-        try:
-            annot = get_type_hints(overload_sign)[param.name]
-        except Exception:
-            module_name = str(func.__module__)
-            annot = _resolve_annotation(param.annotation, module_name)
-        if status := _handle_generic(param, annot, bytes):
-            return status
-    return False
-
-
-def _check_output_sig(func: Callable) -> bool:
-    overloads: Sequence[Callable] = get_overloads(func) or [func]
-    for overload_sign in overloads:
-        sig: Signature = signature(overload_sign)
-        param: Parameter = list(sig.parameters.values())[1]
-        try:
-            annot = get_type_hints(overload_sign)[param.name]
-        except Exception:
-            module_name = str(func.__module__)
-            annot = _resolve_annotation(param.annotation, module_name)
-        if status := _handle_generic(param, annot, BytesIO):
-            return status
-    return False
+__all__ = [
+    "reg_input",
+    "reg_output",
+    "deserialize",
+    "serialize",
+    "create_datatype",
+    "create_io_context",
+    "_IOContext",
+    "DataProcPipeline",
+    "PathTemplate",
+]
 
 
 def reg_input(extension: str, func: Callable, extra_args: dict[str, Any] = {}):
@@ -156,7 +34,7 @@ def reg_input(extension: str, func: Callable, extra_args: dict[str, Any] = {}):
         raise RuntimeError(
             "Первым аргументом функции ввода должен быть объект типа bytes"
         ) from None
-    input_map[extension] = func
+    INPUT_MAP[extension] = func
 
 
 def reg_output(
@@ -168,13 +46,13 @@ def reg_output(
         raise RuntimeError(
             "Вторым аргументом функции вывода должен быть объект типа BytesIO или совместимый с ним байтовый контейнер"
         ) from None
-    output_map[extension] = func
+    OUTPUT_MAP[extension] = func
 
 
 def deserialize(
     content: bytes, format: str, extra_args: dict[str, Any] = {}
 ) -> "Proxied":
-    func: Callable[..., Proxied] = input_map[format]
+    func: Callable[..., Proxied] = INPUT_MAP[format]
     dataobj: Proxied = func(content, **extra_args)
     return dataobj
 
@@ -183,7 +61,7 @@ def serialize(
     dataobj: object, format: str, extra_args: dict[str, Any] = {}
 ) -> bytes:
     byte_buf = BytesIO()
-    func = output_map[format]
+    func = OUTPUT_MAP[format]
     func(dataobj, byte_buf, **extra_args)
     return byte_buf.getvalue()
 
@@ -218,7 +96,7 @@ class DataProxy(DataProxyProto, WrapperNewMixin[Proxied]):
 
     def __new__(cls, content: bytes) -> Proxied:
         try:
-            wrapped: Proxied = input_map[cls.data_format](content)
+            wrapped: Proxied = INPUT_MAP[cls.data_format](content)
         except KeyError as exc:
             raise RuntimeError(
                 "Не зарегистрировано ни одной функции ввода-вывода для данного типа данных"
@@ -266,7 +144,7 @@ def create_datatype(
         format_name.capitalize(), (DataProxy,), {}
     )  # type: ignore[type]
     new_dtype.data_format = format_name
-    if not format_name in input_map or not format_name in output_map:
+    if not format_name in INPUT_MAP or not format_name in OUTPUT_MAP:
         reg_input(format_name, input_func, extra_args_in)
         reg_output(format_name, output_func, extra_args_out)
     datatype_registry[format_name] = new_dtype
@@ -276,33 +154,25 @@ def create_datatype(
 DataTypeInfo: TypeAlias = dict[str, dict[str, Any]]
 
 
-def allowed_datatypes(
-    *, display: bool = False, verbose: bool = False
-) -> list[DataTypeInfo]:
-    ndrows: list[DataTypeInfo] = [
-        datatype_info(k, verbose) for k in datatype_registry
-    ]
+def allowed_datatypes(*, display: bool = False) -> list[DataTypeInfo]:
+    ndrows: list[DataTypeInfo] = [datatype_info(k) for k in datatype_registry]
     if display:
         for row in ndrows:
             pprint(row, depth=2, sort_dicts=False)
     return ndrows
 
 
-def datatype_info(datatype: str, verbose: bool = False) -> DataTypeInfo:
+def datatype_info(datatype: str) -> DataTypeInfo:
     info: DataTypeInfo = {
         datatype: {
             "type": datatype_registry.get(datatype),
-            "output func": output_map.get(datatype),
-            "input func": input_map.get(datatype),
+            "output func": OUTPUT_MAP.get(datatype),
+            "input func": INPUT_MAP.get(datatype),
             "data container": signature(
-                input_map.get(datatype)
+                INPUT_MAP.get(datatype)
             ).return_annotation,
         }
     }
-    if verbose:
-        # FIXME: добить это место
-        # добавляется источник кода, тип функции и т.п.
-        ...
     return info
 
 
@@ -407,14 +277,14 @@ class DataProcPipeline:
     def _check_sig(self, func: Callable) -> None:
         ctx: _IOContext = [
             ctx
-            for ctx in chain(*io_context_map.values())
+            for ctx in chain(*IOCONTEXT_MAP.values())
             if ctx.ctx_id == self.binding_id
         ][0]
         return_annot: type = signature(func).return_annotation
         func_args_annot: list[type] = [
             param.annotation for param in signature(func).parameters.values()
         ]
-        input_func = input_map[ctx.in_format]
+        input_func = INPUT_MAP[ctx.in_format]
         return_input_annot = _resolve_annotation(
             signature(input_func).return_annotation, str(input_func.__module__)
         )
@@ -442,7 +312,7 @@ class DataProcPipeline:
     def show_pipline(self):
         ctx: _IOContext = [
             ctx
-            for ctx in chain(*io_context_map.values())
+            for ctx in chain(*IOCONTEXT_MAP.values())
             if ctx.ctx_id == self.binding_id
         ][0]
         pipe: list[str] = [
@@ -516,9 +386,6 @@ class _IOContext:
             return self
 
 
-io_context_map: dict[str | int, list[_IOContext]] = defaultdict(list)
-
-
 def create_io_context(
     *,
     target: object,
@@ -531,7 +398,7 @@ def create_io_context(
         k: v for k, v in locals().items() if v is not None
     }
     ctx = _IOContext(**kwargs)
-    io_context_map[id(target)].append(ctx)
+    IOCONTEXT_MAP[id(target)].append(ctx)
     return ctx
 
 

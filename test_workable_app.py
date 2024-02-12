@@ -1,17 +1,7 @@
-from pathlib import Path
-from typing import TYPE_CHECKING, NoReturn
-
 import httpx
 import jmespath
 import pandas as pd
 from polars import DataFrame, Series, Time
-
-from exceptions import EndOfResource
-from yass import Yass
-
-if TYPE_CHECKING:
-    from resources import ApiResource, ResourceRequest
-    from scrapers import ApiScraper
 
 headers = {
     "Content-Type": "application/x-www-form-urlencoded",
@@ -68,11 +58,15 @@ from datetime import datetime, time
 
 import polars as pl
 from regex import Pattern, regex
-
-import contentio
-from repo import RepoManager
-from resources import ApiResource, ResourceRequest
-from scrapers import ApiScraper
+from yass import (
+    ApiRequest,
+    ApiResource,
+    ApiScraper,
+    StorageManager,
+    Yass,
+    contentio,
+)
+from yass.exceptions import EndOfResource
 
 # TODO: нужно сделать обработку сигналов ОС, в том числе отмену с клавы.
 app = Yass()
@@ -83,9 +77,9 @@ scraper.extra_headers = headers
 # TODO: нужно предусмотреть стратегии сброса данных - по циклу или по памяти или сразу. Также нужно дать возможность создавать резервную копию данных на диске на фоне.
 # TODO: нужно предусмотреть стратегию что делать с совпадающими файлами - перезаписывать их, добавлять новый файл с префиксом или аппендить. Для SQL движков это работать не должно.
 # TODO: нужно сделать возможность синхронного и асинхронного чтения, записи и т.д. из функций уровня модуля. Не всегда нужно будет асинхронное взаимодействие.
-storage: RepoManager = scraper.storage
+storage: StorageManager = scraper.storage
 resource: ApiResource = scraper.resource
-rquery: ResourceRequest = resource.get_request(name="de_vacancy")
+rquery: ApiRequest = resource.get_request(name="de_vacancy")
 areas_map = {"area": prepare_area_lst()}
 rquery.set_mutable_field(areas_map)
 search_string = {"text": "data+engineer"}
@@ -193,7 +187,7 @@ def next_url(data: DataFrame) -> DataFrame:
         raise EndOfResource
 
 
-from test_new_timecond import TimeCondition
+from yass.scheduling.timeinterval import TimeCondition
 
 # TODO: все таки нужны хэндлеры для интервалов времени, чтобы можно было вводить дату и время в строковом виде.
 # TODO: поля нужно сделать kw, иначе можно запутаться что и как. Плюс поле (one_run) скрыть из сигнатуры.

@@ -1,4 +1,3 @@
-import asyncio
 import inspect
 from asyncio import to_thread
 from collections.abc import Awaitable, Callable
@@ -6,10 +5,10 @@ from functools import wraps
 from inspect import iscoroutinefunction, isfunction
 from typing import Any, Literal, ParamSpec, Self, TypeVar
 
+__all__: list[str] = ["scale_bytes", "SizeUnit"]
+
 T = TypeVar("T")
 P = ParamSpec("P")
-
-from dataclasses import dataclass
 
 
 def to_async(func: Callable[P, T]) -> Callable[..., Awaitable[T]]:
@@ -64,21 +63,4 @@ def scale_bytes(sz: int | float, unit: SizeUnit) -> int | float:
 
 
 if __name__ == "__name__":
-
-    @dataclass
-    class Example:
-        boolish: bool = True
-
-        @to_async
-        def hellower(self) -> None:
-            print("Hello!")
-
-        @property
-        def boolbool(self):
-            return self.boolish
-
-    async def test():
-        e: Example = Example()
-        await e.hellower()
-
-    asyncio.run(test())
+    ...
