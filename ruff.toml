@@ -1,9 +1,16 @@
-respect-gitignore = true
-fix-only = true
-show-fixes = false
-show-source = false
-line-length = 79
-select = [
+respect-gitignore=true
+fix-only=true
+show-fixes=false
+line-length=79
+target-version="py311"
+
+[format]
+line-ending="native"
+quote-style="double"
+skip-magic-trailing-comma=true
+
+[lint]
+select=[
   "E401",
   "F504",
   "F634",
@@ -34,20 +41,18 @@ select = [
   "RET507",
   "RET508",
   "SIM",
-  "ARG"
+  "ARG",
 ]
-ignore = ["W191", "W505", "ARG001"]
-
-[format]
-line-ending = "native"
-quote-style = "double"
-skip-magic-trailing-comma = true
+ignore=["W191", "W505", "ARG001"]
 
 [lint.flake8-unused-arguments]
-ignore-variadic-names = true
+ignore-variadic-names=true
 
 [lint.pycodestyle]
-ignore-overlong-task-comments = true
+ignore-overlong-task-comments=true
 
 [lint.pydocstyle]
-ignore-decorators = ["typing.overload"]
+ignore-decorators=["typing.overload"]
+
+[lint.isort]
+split-on-trailing-comma=false

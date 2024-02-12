@@ -280,7 +280,7 @@ def allowed_datatypes(
     *, display: bool = False, verbose: bool = False
 ) -> list[DataTypeInfo]:
     ndrows: list[DataTypeInfo] = [
-        datatype_info(k, verbose) for k in datatype_registry.keys()
+        datatype_info(k, verbose) for k in datatype_registry
     ]
     if display:
         for row in ndrows:
@@ -291,11 +291,11 @@ def allowed_datatypes(
 def datatype_info(datatype: str, verbose: bool = False) -> DataTypeInfo:
     info: DataTypeInfo = {
         datatype: {
-            "type": datatype_registry.get(datatype, None),
-            "output func": output_map.get(datatype, None),
-            "input func": input_map.get(datatype, None),
+            "type": datatype_registry.get(datatype),
+            "output func": output_map.get(datatype),
+            "input func": input_map.get(datatype),
             "data container": signature(
-                input_map.get(datatype, None)
+                input_map.get(datatype)
             ).return_annotation,
         }
     }

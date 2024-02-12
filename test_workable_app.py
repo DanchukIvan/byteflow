@@ -62,7 +62,7 @@ schema["city"] = "area.name"
 schema["salary"] = "salary.from"
 schema["published_at"] = "published_at"
 schema["req_skills"] = "snippet.requirement"
-schema["expirience"] = "experience.name"
+schema["experience"] = "experience.name"
 
 from datetime import datetime, time
 

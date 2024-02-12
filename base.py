@@ -241,14 +241,14 @@ class YassCore(metaclass=YassMeta):
 
     @property
     def available_impl(self):
-        for superclass in factory_registry.keys():
+        for superclass in factory_registry:
             if issubclass(type(self), superclass):
                 subcls_series: list[tuple[str, type]] = [
                     (k, v) for k, v in factory_registry[superclass].items()
                 ]
                 return subcls_series
             else:
-                print("Not avaible implementation")
+                print("Not available implementation")
                 return []
 
 

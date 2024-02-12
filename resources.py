@@ -55,7 +55,7 @@ class ResourceRequest:
             self.mutable_fields.update(params)
 
     def _build_mf_iterator(
-        self: Self
+        self: Self,
     ) -> AsyncIterator[tuple[tuple[str, str], ...]]:
         mf_lst: list[Iterator[tuple[str, str]]] = [
             zip_longest([key], value, fillvalue=key)
