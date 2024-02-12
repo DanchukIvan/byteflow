@@ -3,12 +3,12 @@ from functools import update_wrapper
 from typing import TYPE_CHECKING, Any, Self
 
 if TYPE_CHECKING:
-    from base import ActionCondition
+    from .base import ActionCondition
 
 __all__: list[str] = ["as_trigger", "ACTIVE_CONDITIONS"]
 
 
-class Conditions(dict[ActionCondition, Callable]):
+class Conditions(dict["ActionCondition", Callable]):
     ...
 
 
@@ -27,7 +27,7 @@ class _ProxyMethodDescriptor:
         self.func = self.func.__get__(self.obj, self.obj.__class__)
         return self
 
-    def setup_trigger(self, condition: ActionCondition) -> None:
+    def setup_trigger(self, condition: "ActionCondition") -> None:
         ACTIVE_CONDITIONS[condition] = self.func
 
     def __call__(self, *args: Any, **kwds: Any) -> Any:

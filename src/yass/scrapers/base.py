@@ -3,11 +3,8 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import KW_ONLY, InitVar, dataclass, field
 
-from yarl import URL
-
-from yass.exceptions.exceptions import EndOfResource
-
 from ..core import YassCore
+from ..exceptions import EndOfResource
 from ..resources import BaseResource
 from ..storages import StorageManager
 

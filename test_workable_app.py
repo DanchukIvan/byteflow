@@ -58,15 +58,16 @@ from datetime import datetime, time
 
 import polars as pl
 from regex import Pattern, regex
-from yass import (
+
+from src.yass import (
     ApiRequest,
     ApiResource,
     ApiScraper,
+    EndOfResource,
     StorageManager,
     Yass,
     contentio,
 )
-from yass.exceptions import EndOfResource
 
 # TODO: нужно сделать обработку сигналов ОС, в том числе отмену с клавы.
 app = Yass()
@@ -86,9 +87,9 @@ search_string = {"text": "data+engineer"}
 rquery.set_persist_field(search_string)
 # TODO: сделать make_part служебной функцией
 # TODO: сложно че-то заполнять, нужно автоматом генерить имена шаблонов, а закидывать списки чего-то в качестве значений аттрибутов
-filepart = {"part": rquery.part_name}
-folderpart = {"part1": datetime.now().date}
-rootpart = {"part2": "test-new-prog"}
+filepart = {"date": datetime.now, "name": rquery.part_name}
+folderpart = {"part1": "data_engineer_2"}
+rootpart = {"part2": "api.hh.ru"}
 
 # TODO: нужно однозначно делать пресеты - замучаешься фигачить все типы данных нужные
 # TODO: исключить оборачивание в DataProxy - так проще будет работать с данными - но оставить классы, чтобы потом изучить как можно
@@ -187,13 +188,13 @@ def next_url(data: DataFrame) -> DataFrame:
         raise EndOfResource
 
 
-from yass.scheduling.timeinterval import TimeCondition
+from src.yass import TimeCondition
 
 # TODO: все таки нужны хэндлеры для интервалов времени, чтобы можно было вводить дату и время в строковом виде.
 # TODO: поля нужно сделать kw, иначе можно запутаться что и как. Плюс поле (one_run) скрыть из сигнатуры.
 # TODO: нужно сделать стратегии на выбор - edger_start (запускаемся сразу несмотря на лаг), in_time (выравниваем время и ждем следующего запуска)
 # TODO: некорректно работает сдвиг лага - нужно посмотреть возможно снова ошибка в логике. Сейчас вроде считает, но делает смещение больше или меньше нужного интервала.
-time_interval = TimeCondition(1, time(8, 0), time(20, 00), frequency=4)
+time_interval = TimeCondition(1, time(8, 0), time(22, 00), frequency=2)
 # TODO: нужно немного изменить логику триггеров - нужно ввести класс EdgerStart, который сразу запускает функцию на исполнение и будет классом по умолчанию.
 # Плюс регистрировать триггеры возможно как-то иначе, чтобы регилось не конкретное условие, а сам дескриптор.
 scraper.scrape.setup_trigger(time_interval)

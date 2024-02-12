@@ -4,7 +4,7 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any, Self
 
-from core import YassCore
+from ..core import YassCore
 
 
 @dataclass

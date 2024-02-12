@@ -2,9 +2,8 @@ from asyncio import FIRST_COMPLETED, Task, create_task, run, wait
 from dataclasses import dataclass, field
 from typing import Literal
 
-from scrapers import ApiScraper
-
 from .scheduling.triggers import ACTIVE_CONDITIONS
+from .scrapers import ApiScraper
 
 
 @dataclass

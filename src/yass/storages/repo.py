@@ -20,8 +20,7 @@ from typing import (
 from fsspec import get_filesystem_class
 from fsspec.asyn import AsyncFileSystem
 
-from yass.exceptions.exceptions import EndOfResource
-
+from ..exceptions import EndOfResource
 from .base import BaseStorageManager
 
 P = ParamSpec("P")
@@ -228,7 +227,7 @@ class ContentManager:
             )
         self.mem_alloc = scale_bytes(mem_alloc, "mb")
 
-    def get_content(self, path: str) -> DataProxyProto | Future | None:
+    def get_content(self, path: str) -> Any | Future | None:
         for queue in self.queques.values():
             if path in queue.values():
                 return queue[path]
@@ -237,7 +236,7 @@ class ContentManager:
         ctx_id: int = id(ctx)
         # TODO: тут нужен асинхронный лок для общей очереди, вообще нужен лок при обращении к разделяемым ресурсам и переменным.
         # TODO: лок у каждого экземпляра будет свой.
-        target_queue: dict[str, DataProxyProto | Future] = copy.deepcopy(
+        target_queue: dict[str, Any | Future] = copy.deepcopy(
             self.queques[ctx_id]
         )
         self.queques[ctx_id].clear()

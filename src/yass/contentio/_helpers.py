@@ -61,6 +61,7 @@ def _resolve_annotation(annotated: Any, module_name: str):
                 try:
                     import builtins
                     import io
+                    import pathlib
                     import typing
 
                     mod = import_module(search_area)
@@ -68,6 +69,7 @@ def _resolve_annotation(annotated: Any, module_name: str):
                         getattr(mod, annot, False)
                         or getattr(builtins, annot, False)
                         or getattr(io, annot, False)
+                        or getattr(pathlib, annot, False)
                         or getattr(typing, annot, ast.literal_eval(annot))
                     )
                     if typeclass is not None:
