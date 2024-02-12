@@ -1,85 +1,64 @@
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires=["hatchling"]
+build-backend="hatchling.build"
 
-[tool.commitizen]
-name = "cz_conventional_commits"
-tag_format = "v$minor.$major.$patch$prerelease"
-version_scheme = "semver"
-version_provider = "poetry"
-update_changelog_on_bump = true
-changelog_merge_prerelease = true
-changelog_file = 'CHANGELOG.rst'
-encoding = 'utf-8'
+[project]
+name="yass"
+description="Yet Another Simple Scraper"
+requires-python=">=3.11"
+authors=[
+    {name="Danchuk Ivan", email="ivan.s.danchuk@gmail.com"},
+    {name="Ivan Danchuk", email="ivan.s.danchuk@gmail.com"},
+    {name="Your Name", email="you@example.com"},
+]
+maintainers=[{name="Danchuk Ivan", email="ivan.s.danchuk@gmail.com"}]
+keywords=[
+    "scraping",
+    "web scraping",
+    "asyncio",
+    "web crawler",
+    "api crawler",
+    "api scraping",
+]
+classifiers=[
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: Microsoft",
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Libraries",
+]
+version="0.1.0a1"
+dependencies=[
+    "aiohttp<4.0.0,>=3.9.3",
+    "aioitertools<1.0.0,>=0.11.0",
+    "asyncio",
+    "beartype<1.0.0,>=0.16.4",
+    "dotted-dict<2.0.0,>=1.1.3",
+    "fsspec<2024.0.0,>=2023.12.2",
+    "more-itertools",
+    "morefs[asynclocal]<1.0.0,>=0.1.2",
+    "openpyxl<4.0.0,>=3.1.2",
+    "pandas[pyarrow]>=2.2.0",
+    "polars[pyarrow]<1.0.0,>=0.19.0",
+    "regex<2024.0.0,>=2023.12.25",
+    "s3fs<2024.0.0,>=2023.12.2",
+    "uvloop; platform_system == \"Linux\"",
+    "yarl<2.0.0,>=1.9.4",
+]
+readme="README.md"
 
-[tool.commitizen.customize]
-# FIXME: cz очень сырой - он не распознает кастомные настройки парсинга, в связи с чем его можно использовать
-# только для бампинга версий и формирования changelog (и то это под вопросом). Соответственно хук нужно сносить.
-schema_pattern = '(?s)(build|ci|docs|feat|fix|perf|refactor|ref|removal|remove_feat|hotfix|style|test|chore|revert|bump)(\(\S+\))?!?:( [^\n\r]+)([\n\n.]*|[ ]*)([\S\s]+)'
-bump_map = {"break" = "MAJOR", "removal" = "MAJOR", "feat" = "MINOR", "build" = "MINOR", "perf" = 'PATCH', "fix" = "PATCH", "docs" = "PATCH", "hotfix" = "PATCH"}
-change_type_map = {"removal" = "Deprecated API", "remove_feat" = "Deprecated features", "feat" = "New features", "build" = "Updated external dependencies", "ref" = "Refactored", "perf" = "Performance improvements", "fix" = "Bugfixes and patches", docs = "Documentation changes", "hotfix" = "Hotfixes", "style" = "Code style improvements"}
+[project.license]
+text="Apache 2.0"
 
-[tool.poetry]
-name = "yass"
-version = "v0.0.1"
-description = "Универсальный скрапер, который легко запустить"
-authors = ["Your Name <you@example.com>"]
-readme = "README.md"
+[tool.pdm]
+distribution=true
 
-[tool.poetry.dependencies]
-python = "^3.11"
-asyncio = "*"
-playwright = "*"
-# uvloop = "*"
-pandas = {version = ">=2.0", extras = ['pyarrow']}
-polars = {version = "^0.19.0", extras = ["pyarrow"]}
-aioboto3 = {version = "^11.3.0", extras = ["boto3"]}
-pre-commit = "^3.4.0"
-more-itertools = "*"
-orjson = "^3.9.7"
-regex = "^2023.8.8"
-morefs = {extras = ["asynclocal"], version = "^0.1.2"}
-fsspec = "^2023.10.0"
-aioitertools = "^0.11.0"
-s3fs = "^2023.12.0"
-dotted-dict = "^1.1.3"
-mypy = "^1.8.0"
-aiohttp = "^3.9.1"
-yarl = "^1.9.4"
-beartype = "^0.16.4"
-hatch = "^1.9.3"
-openpyxl = "^3.1.2"
+[tool.pdm.dev-dependencies]
+hook=["pre-commit<4.0.0,>=3.6.0"]
+dev=["dynaconf"]
+doc=["mkdocs-material>=9.5.9", "mkdocstrings[python]>=0.24.0"]
+test=["pytest", "pytest-mock", "pytest-playwright"]
 
-[tool.poetry.group.dev]
-
-[tool.poetry.group.dev.dependencies]
-dynaconf = "*"
-
-[tool.poetry.group.docs]
-optional = true
-
-[tool.poetry.group.docs.dependencies]
-sphinx = "^7.2.6"
-sphinx-click = "^5.1.0"
-sphinx-autodoc-typehints = "^1.25.2"
-sphinx-tabs = "^3.4.4"
-sphinx-last-updated-by-git = "^0.3.6"
-sphinx-sitemap = "^2.5.1"
-sphinx-paramlinks = "^0.6.0"
-sphinx-lfs-content = "^1.1.4"
-seed-intersphinx-mapping = "^1.2.2"
-sphinx-copybutton = "^0.5.2"
-sphinx-design = "^0.5.0"
-sphinx-notfound-page = "^1.0.0"
-esbonio = "^0.16.3"
-sphinxawesome-theme = {version = "^5.0.0b6", allow-prereleases = true}
-myst-parser = "^2.0.0"
-sphinxcontrib-autodoc-inherit-overload = "^2023.4"
-
-[tool.poetry.group.test]
-optional = true
-
-[tool.poetry.group.test.dependencies]
-pytest-playwright = "*"
-pytest = "*"
-pytest-mock = "*"
+[tool.pdm.build]
+includes=[]
