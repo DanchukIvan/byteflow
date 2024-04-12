@@ -1,7 +1,22 @@
+from __future__ import annotations
+
+from ast import literal_eval
+from pathlib import Path
+from typing import TYPE_CHECKING
+
 import httpx
 import jmespath
 import pandas as pd
-from polars import DataFrame, Series, Time
+from polars import DataFrame
+from yass import EntryPoint, contentio
+from yass.resources import MaxPageEORTrigger
+from yass.scheduling import TimeCondition
+
+if TYPE_CHECKING:
+    from yass.resources import ApiRequest, ApiResource
+    from yass.scheduling.base import ActionCondition
+    from yass.storages.blob import FsBlobStorage
+
 
 headers = {
     "Content-Type": "application/x-www-form-urlencoded",
@@ -16,6 +31,10 @@ s3_kwargs = {
 
 
 def prepare_area_lst(slicer: tuple[int, int] | None = None) -> list[int]:
+    if Path("areas.txt").exists():
+        with open("areas.txt") as file:
+            txt = file.read()
+            return literal_eval(txt)
     population_df = pd.read_csv(
         "https://raw.githubusercontent.com/hflabs/city/master/city.csv"
     )
@@ -41,6 +60,8 @@ def prepare_area_lst(slicer: tuple[int, int] | None = None) -> list[int]:
         areas: list[int] = area_pattern.search(res.json())
         areas2 = area_pattern2.search(res.json())
         areas.extend(areas2)
+        with open("areas.txt", "+w", encoding="utf-8") as file:
+            file.write(str(areas))
         if slicer is not None:
             return areas[slice(*slicer)]
         return areas
@@ -54,42 +75,57 @@ schema["published_at"] = "published_at"
 schema["req_skills"] = "snippet.requirement"
 schema["experience"] = "experience.name"
 
-from datetime import datetime, time
+from datetime import datetime
 
+import orjson
 import polars as pl
-from regex import Pattern, regex
-
-from src.yass import (
-    ApiRequest,
-    ApiResource,
-    ApiScraper,
-    EndOfResource,
-    StorageManager,
-    Yass,
-    contentio,
-)
+from regex import regex
 
 # TODO: нужно сделать обработку сигналов ОС, в том числе отмену с клавы.
-app = Yass()
+app = EntryPoint()
+
+# TODO: все таки нужны хэндлеры для интервалов времени, чтобы можно было вводить дату и время в строковом виде.
+# TODO: поля нужно сделать kw, иначе можно запутаться что и как. Плюс поле (one_run) скрыть из сигнатуры.
+# TODO: нужно сделать стратегии на выбор - edger_start (запускаемся сразу несмотря на лаг), in_time (выравниваем время и ждем следующего запуска)
+# TODO: некорректно работает сдвиг лага - нужно посмотреть возможно снова ошибка в логике. Сейчас вроде считает, но делает смещение больше или меньше нужного интервала.
+time_interval_f: ActionCondition = TimeCondition(
+    period=(1, 3, 5, 7), start_time="11:22", end_time="22:00", frequency=2
+)
+time_interval_s: ActionCondition = TimeCondition(
+    period=1, start_time="11:23", end_time="22:00", frequency=2
+)
+eor = MaxPageEORTrigger(
+    search_area="content", current_page_field="page", max_page_field="pages"
+)
+
+
+@eor.set_content_handler
+def get_fields(response):
+    jsoned: dict = orjson.loads(response)
+    return jsoned
+
+
 # TODO: нужно сделать так, чтобы Репо отстреливало старт если нет ни одного контекста. То есть нужно сделать свою версию defaultdict, которая в режиме редактирования
 # позволяет создавать произвольные ключи. Или просто возвращать МаппингПрокси, который запрещает редактирование экземпляров.
-scraper: ApiScraper = app.make_crawl(url, crawl_type="api")
-scraper.extra_headers = headers
+resource: ApiResource = app.define_resource(resource_type="api", url=url)
+resource = resource.configure(
+    extra_headers=headers, max_batch=3, delay=1, eor_triggers=[eor]
+)
 # TODO: нужно предусмотреть стратегии сброса данных - по циклу или по памяти или сразу. Также нужно дать возможность создавать резервную копию данных на диске на фоне.
 # TODO: нужно предусмотреть стратегию что делать с совпадающими файлами - перезаписывать их, добавлять новый файл с префиксом или аппендить. Для SQL движков это работать не должно.
 # TODO: нужно сделать возможность синхронного и асинхронного чтения, записи и т.д. из функций уровня модуля. Не всегда нужно будет асинхронное взаимодействие.
-storage: StorageManager = scraper.storage
-resource: ApiResource = scraper.resource
-rquery: ApiRequest = resource.get_request(name="de_vacancy")
-areas_map = {"area": prepare_area_lst()}
-rquery.set_mutable_field(areas_map)
-search_string = {"text": "data+engineer"}
-rquery.set_persist_field(search_string)
+storage: FsBlobStorage = app.define_storage(storage_type="blob")
+storage = storage.configure(
+    engine_proto="s3",
+    engine_params=s3_kwargs,
+    bufferize=True,
+    limit_type="count",
+    limit_capacity=10,
+)
+areas_map: dict[str, list[int]] = {"area": prepare_area_lst()}
+search_string: dict[str, str] = {"text": "data+engineer"}
 # TODO: сделать make_part служебной функцией
 # TODO: сложно че-то заполнять, нужно автоматом генерить имена шаблонов, а закидывать списки чего-то в качестве значений аттрибутов
-filepart = {"date": datetime.now, "name": rquery.part_name}
-folderpart = {"part1": "data_engineer_2"}
-rootpart = {"part2": "api.hh.ru"}
 
 # TODO: нужно однозначно делать пресеты - замучаешься фигачить все типы данных нужные
 # TODO: исключить оборачивание в DataProxy - так проще будет работать с данными - но оставить классы, чтобы потом изучить как можно
@@ -106,16 +142,27 @@ contentio.create_datatype(
 )
 # TODO: нужно сделать проверку на поле привязки - все таки будем привязывать только к запросам. Можно ещё к ресурсам, но тогда нужно думать
 # про диспетчеризацию объектов.
-context = contentio.create_io_context(
-    target=rquery,
-    in_format="json",
-    out_format="csv",
-    storage_proto="s3",
-    storage_kwargs=s3_kwargs,
+context: contentio.IOContext = contentio.create_io_context(
+    in_format="json", out_format="csv", storage=storage
 )
-context.path_temp = contentio.PathTemplate(
-    filepart, folder_part=folderpart, root_part=rootpart, delim="-"
+
+query_f: ApiRequest = resource.make_query(
+    "hh1.ru",
+    persist_fields=search_string,
+    mutable_fields=areas_map,
+    collect_interval=time_interval_f,
+    io_context=context,
+    has_pages=True,
 )
+query_s: ApiRequest = resource.make_query(
+    "hh2.ru",
+    persist_fields=search_string,
+    mutable_fields=areas_map,
+    collect_interval=time_interval_s,
+    io_context=context,
+    has_pages=True,
+)
+pipeline: contentio.IOBoundPipeline = context.attache_pipline()
 
 
 # TODO: нужно проверять сигнатуру функции на совместимость в типом возврата в функции десереализации в контексте
@@ -124,11 +171,21 @@ context.path_temp = contentio.PathTemplate(
 # TODO: нужно сделать __setitem__ для поиска среди функций и их редактирования (например, замены функции на другую) или метод replace
 # TODO: нужно автоматически присваивать шагу имя функции для целей логирования.
 # TODO: нужно дать возможность навешивать эксепшн хэндлеры на пайплайны
-@context.wrap_pipeline.step(1)
+@pipeline.content_filter
+def empty_content(data: DataFrame) -> bool:
+    try:
+        data = data.select(pl.col("items").explode()).unnest("items")
+    except Exception:
+        return False
+    else:
+        return True
+
+
+@pipeline.step(1)
 def parse_schema(data: DataFrame) -> DataFrame:
     print(f"Start pipeline {parse_schema.__name__}")
     data = data.select(pl.col("items").explode()).unnest("items")
-    condition_filter: Pattern[str] = regex.compile(r"\b(?=\[)\b|\b(?=\.).\b")
+    condition_filter = regex.compile(r"\b(?=\[)\b|\b(?=\.).\b")
     for alias, json_path in schema.items():
         json_path: str
         key_path = condition_filter.split(json_path, 0)
@@ -141,21 +198,22 @@ def parse_schema(data: DataFrame) -> DataFrame:
                 pl.col(key).struct.json_encode().alias(alias)
             )
             data = data.with_columns(
-                pl.col(alias).str.json_path_match(f"$.{path}").alias(alias)
+                pl.col(alias).str.json_path_match(f"$.{path}")
             )
         else:
             data = data.with_columns(pl.col(key).alias(alias))
     data = data.select(pl.col(schema.keys()))
     data = data.with_columns(
         pl.col("published_at").str.to_datetime().cast(pl.Date),
-        pl.col("salary").cast(pl.Int16),
+        pl.col("salary").cast(pl.Float64),
     )
     data = data.fill_null(0)
     print(f"End pipeline {parse_schema.__name__}")
+    print(data.head(3))
     return data
 
 
-@context.wrap_pipeline.step(2)
+@pipeline.step(2)
 def insert_metadata(data: DataFrame) -> DataFrame:
     created_at = pl.Series(
         "created_at", [datetime.now().date()] * data.shape[0]
@@ -164,41 +222,18 @@ def insert_metadata(data: DataFrame) -> DataFrame:
     return data
 
 
-@context.wrap_pipeline.step(3)
-def merge(data: DataFrame) -> DataFrame:
-    # TODO: доступ к очередям нужно закрыть потоковым локом
-    queue: dict[str, DataFrame] = scraper.storage.queques[id(context)]
-    new_data: DataFrame = data
-    if queue:
-        for path, dataobj in queue.items():
-            if sorted(data.columns) == sorted(dataobj.columns):
-                new_data = new_data.extend(dataobj)
-    final_data: DataFrame = new_data.filter(data.is_unique())
-    return final_data
+from yass.storages import read
 
+__all__ = [
+    "empty_content",
+    "get_fields",
+    "insert_metadata",
+    "parse_schema",
+    "prepare_area_lst",
+]
 
-# TODO: нужно тестить функцию на предмет наличия возврата EOR
-@context.wrap_pipeline.eorsignal
-def next_url(data: DataFrame) -> DataFrame:
-    try:
-        target_data: Series = data["items"]
-        has_data = target_data.explode().struct.unnest()
-        return data
-    except Exception:
-        raise EndOfResource
-
-
-from src.yass import TimeCondition
-
-# TODO: все таки нужны хэндлеры для интервалов времени, чтобы можно было вводить дату и время в строковом виде.
-# TODO: поля нужно сделать kw, иначе можно запутаться что и как. Плюс поле (one_run) скрыть из сигнатуры.
-# TODO: нужно сделать стратегии на выбор - edger_start (запускаемся сразу несмотря на лаг), in_time (выравниваем время и ждем следующего запуска)
-# TODO: некорректно работает сдвиг лага - нужно посмотреть возможно снова ошибка в логике. Сейчас вроде считает, но делает смещение больше или меньше нужного интервала.
-time_interval = TimeCondition(1, time(8, 0), time(22, 00), frequency=2)
-# TODO: нужно немного изменить логику триггеров - нужно ввести класс EdgerStart, который сразу запускает функцию на исполнение и будет классом по умолчанию.
-# Плюс регистрировать триггеры возможно как-то иначе, чтобы регилось не конкретное условие, а сам дескриптор.
-scraper.scrape.setup_trigger(time_interval)
-# TODO: нужно предусмотреть тестовый старт приложения - чтобы обойти разок ресурс и проверить работоспособность. Может даже отчет какой-то сформировать, а потом и превью.
-
-if __name__ == "__main__":
-    app.run()
+data = read(
+    storage.engine,
+    r"api.hh.ru/hh1.ru/2024-04-11_hh1.ru_1712845920.6408794.csv",
+)
+print(data)
