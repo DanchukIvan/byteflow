@@ -1,14 +1,18 @@
-class YassException(BaseException):
-    ...
+__all__ = [
+    "CriticalException",
+    "EndOfResource",
+    "InterceptedException",
+    "YassException",
+]
 
 
-class InterceptedException(YassException):
-    ...
+class YassException(BaseException): ...
 
 
-class CriticalException(YassException):
-    ...
+class InterceptedException(YassException): ...
 
 
-class EndOfResource(InterceptedException):
-    ...
+class CriticalException(YassException): ...
+
+
+class EndOfResource(InterceptedException): ...
