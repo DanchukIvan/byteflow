@@ -20,6 +20,7 @@ from yass.contentio.common import *
 
 __all__ = [
     "IOBoundPipeline",
+    "IOContext",
     "PathSegment",
     "PathTemplate",
     "allowed_datatypes",
@@ -192,44 +193,53 @@ class IOBoundPipeline:
 
         return wrapper
 
-    def eorsignal(self, predicate: Callable) -> Callable:
-        self._check_sig(predicate)
-        self.eor_checker = predicate
-        return predicate
+    def error_handler(self, func: Callable):
+        self.on_error = func
 
-    def run_transform(self, dataobj: Any) -> Coroutine:
-        coro: Coroutine = to_thread(
-            reduce, lambda arg, func: func(arg), self.functions, dataobj
-        )
-        return coro
+    def content_filter(self, func: Callable[..., bool]):
+        self.data_filter = func
 
-    def accept_handler(self, func: Callable) -> bool:
-        try:
-            self._check_sig(func)
-            return True
-        except ValueError as exc:
-            msg = exc.args
-            print(
-                f"Функция-обработчик должна принимать объект класса {msg} и возвращать его."
-            )
-            return False
-
-    # TODO: нужно проверять, что тип возврата функции обработки есть в аргументах функции десериализации
-    def _check_sig(self, func: Callable) -> None:
-        ctx: _IOContext = [
-            ctx
-            for ctx in chain(*IOCONTEXT_MAP.values())
-            if ctx.ctx_id == self.binding_id
-        ][0]
-        return_annot: type = signature(func).return_annotation
-        func_args_annot: list[type] = [
-            param.annotation for param in signature(func).parameters.values()
+    @asynccontextmanager
+    async def run_transform(
+        self, dataobj: Iterable[Any]
+    ) -> AsyncIterator[Future]:
+        valid_content: list[Any] = [
+            data for data in dataobj if self.data_filter(data)
         ]
+        try:
+            coros = []
+            for data in valid_content:
+                coro: Coroutine[Any, None, Any] = to_thread(
+                    reduce, lambda arg, func: func(arg), self.functions, data
+                )
+                coros.append(coro)
+            yield gather(*coros)
+        except Exception as exc:
+            res: Any = self.on_error(exc)
+            if isinstance(res, Exception):
+                raise res
+
+    # TODO: нужно проверять, что тип возвращаемого значения функции обработки есть в аргументах функции десериализации входящих значений
+    def _check_sig(self, func: Callable) -> None:
+        ctx: IOContext = self.io_context
+        return_annot: type = signature(func).return_annotation
+        if isinstance(return_annot, str):
+            return_annot = _resolve_annotation(
+                return_annot, str(func.__module__)
+            )[0]
+        func_args_annot: list[type] = list(
+            chain(
+                *[
+                    _resolve_annotation(param.annotation, str(func.__module__))
+                    for param in signature(func).parameters.values()
+                ]
+            )
+        )
         input_func = INPUT_MAP[ctx.in_format]
         return_input_annot = _resolve_annotation(
             signature(input_func).return_annotation, str(input_func.__module__)
         )
-        valid_annot = [
+        valid_annot: list[type] = [
             arg_annot
             for arg_annot in func_args_annot
             if issubclass(arg_annot, return_input_annot)
@@ -245,62 +255,60 @@ class IOBoundPipeline:
         func: Callable = self.functions.pop(old_idx)
         self.functions.insert(new_idx, func)
 
-    def get_pipeline(self) -> tuple[tuple[int, str], ...]:
+    def get_functions(self) -> tuple[tuple[int, str], ...]:
         return tuple(
             (order, func.__name__) for order, func in enumerate(self.functions)
         )
 
     def show_pipline(self):
-        ctx: _IOContext = [
-            ctx
-            for ctx in chain(*IOCONTEXT_MAP.values())
-            if ctx.ctx_id == self.binding_id
-        ][0]
+        ctx: IOContext = self.io_context
         pipe: list[str] = [
             f"{order}: {func.__name__}"
             for order, func in enumerate(self.functions)
         ]
-        return "->".join(pipe) + f" for {ctx.in_format}."
+        return " -> ".join(pipe) + f" for {ctx.in_format}."
 
 
-pipeline_map: dict[str | int, DataProcPipeline] = {}
+_EMPTY_PIPELINE: IOBoundPipeline = make_empty_instance(IOBoundPipeline)
+_EMPTY_PATHTEMP: PathTemplate = make_empty_instance(PathTemplate)
 
 
-@dataclass
-class _IOContext:
-    target: object = field()
-    in_format: str = field(kw_only=True)
-    out_format: str = field(kw_only=True)
-    storage_proto: str = field(kw_only=True)
-    storage_kwargs: dict = field(kw_only=True)
-    path_temp: PathTemplate = field(init=False, kw_only=True)
-    pipeline: DataProcPipeline | None = field(default=None, kw_only=True)
-
-    def __post_init__(self):
+class IOContext:
+    def __init__(
+        self,
+        *,
+        in_format: str,
+        out_format: str,
+        storage: BaseBufferableStorage,
+    ) -> None:
+        self.in_format: str = in_format
+        self.out_format: str = out_format
         self._check_io()
-
-    @property
-    def ctx_id(self):
-        return id(self.target)
-
-    @property
-    def wrap_pipeline(self) -> DataProcPipeline:
-        if not self.pipeline:
-            self.pipeline = DataProcPipeline(self.ctx_id)
-        return self.pipeline
+        self.storage: BaseBufferableStorage = storage
+        self.path_temp: PathTemplate = _EMPTY_PATHTEMP
+        pipeline: IOBoundPipeline = _EMPTY_PIPELINE
 
     @property
     def out_path(self):
-        return self.path_temp.with_ext(self.out_format)
+        return self.path_temp.render_path(self.out_format)
 
     @property
     def in_path(self):
-        return self.path_temp.with_ext(self.in_format)
+        return self.path_temp.render_path(self.in_format)
+
+    def attache_pipline(self) -> IOBoundPipeline:
+        self.pipeline = IOBoundPipeline(self)
+        return self.pipeline
+
+    def attache_pathgenerator(self) -> PathTemplate:
+        path_temp = PathTemplate()
+        self.path_temp = path_temp
+        return path_temp
 
     def _check_io(self):
         try:
-            in_obj = datatype_registry[self.in_format]
-            out_obj = datatype_registry[self.out_format]
+            in_obj = INPUT_MAP[self.in_format]
+            out_obj = INPUT_MAP[self.out_format]
         except KeyError as exc:
             raise ValueError(
                 f"Не зарегистрирован тип данных {exc.args}."
