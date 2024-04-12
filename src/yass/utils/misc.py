@@ -3,17 +3,17 @@ from asyncio import to_thread
 from collections.abc import Awaitable, Callable
 from functools import wraps
 from inspect import iscoroutinefunction, isfunction
-from typing import Any, Literal, ParamSpec, Self, TypeVar
+from typing import Any, Literal, ParamSpec, TypeVar
 
-__all__: list[str] = ["scale_bytes", "SizeUnit"]
+__all__ = ["SizeUnit", "make_async", "scale_bytes", "to_async"]
 
-T = TypeVar("T")
-P = ParamSpec("P")
+_T = TypeVar("_T")
+_P = ParamSpec("_P")
 
 
-def to_async(func: Callable[P, T]) -> Callable[..., Awaitable[T]]:
+def to_async(func: Callable[_P, _T]) -> Callable[..., Awaitable[_T]]:
     @wraps(func)
-    def wrapped(*args: P.args, **kwargs: P.kwargs) -> Awaitable[T]:
+    def wrapped(*args: _P.args, **kwargs: _P.kwargs) -> Awaitable[_T]:
         return to_thread(func, *args, **kwargs)
 
     return wrapped
@@ -27,18 +27,6 @@ def make_async(cls: type[Any]) -> type:
                 continue
             setattr(cls, name, to_async(meth))  # type: ignore
     return cls
-
-
-class MakeAsyncMixin:
-    def __getattribute__(self: Self, __name: str) -> Awaitable | Any:
-        attr: Any = object.__getattribute__(self, __name)
-        if (
-            not __name.startswith("__")
-            and not iscoroutinefunction(attr)
-            and callable(attr)
-        ):
-            return to_async(attr)
-        return attr
 
 
 SizeUnit = Literal[

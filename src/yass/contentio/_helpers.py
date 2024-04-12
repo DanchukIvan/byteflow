@@ -1,10 +1,17 @@
-import ast
+from ast import literal_eval
 from collections.abc import Callable, Sequence
 from functools import partial
 from importlib import import_module
 from inspect import Parameter, Signature, signature
 from io import BytesIO
-from typing import Any, get_args, get_origin, get_overloads, get_type_hints
+from typing import (
+    Any,
+    NoReturn,
+    get_args,
+    get_origin,
+    get_overloads,
+    get_type_hints,
+)
 
 __all__: list[str] = [
     "_update_sign",
@@ -46,7 +53,9 @@ def _update_sign(func: Callable, extra_kwargs: dict) -> Callable:
     return func
 
 
-def _resolve_annotation(annotated: Any, module_name: str):
+def _resolve_annotation(
+    annotated: Any, module_name: str
+) -> tuple[type, ...] | NoReturn:
     cnt_split = module_name.count(".")
     if isinstance(annotated, str):
         not_resolved = []
@@ -70,7 +79,7 @@ def _resolve_annotation(annotated: Any, module_name: str):
                         or getattr(builtins, annot, False)
                         or getattr(io, annot, False)
                         or getattr(pathlib, annot, False)
-                        or getattr(typing, annot, ast.literal_eval(annot))
+                        or getattr(typing, annot, literal_eval(annot))
                     )
                     if typeclass is not None:
                         result.append(typeclass)
