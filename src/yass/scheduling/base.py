@@ -1,14 +1,19 @@
 from abc import abstractmethod
-from typing import Protocol, Self
+from typing import Self
 
-__all__: list[str] = ["ActionCondition"]
+from yass.core import YassCore
+
+__all__ = ["ActionCondition", "BaseLimit"]
 
 
-class ActionCondition(Protocol):
+class ActionCondition(YassCore):
     @abstractmethod
-    async def pending(self) -> Self:
-        ...
+    async def pending(self) -> Self: ...
 
     @abstractmethod
-    def is_able(self) -> bool:
-        ...
+    def is_able(self) -> bool: ...
+
+
+class BaseLimit(YassCore):
+    @abstractmethod
+    def is_overflowed(self) -> bool: ...
