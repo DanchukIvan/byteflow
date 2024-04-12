@@ -2,17 +2,16 @@ from collections.abc import Callable
 from functools import update_wrapper
 from typing import TYPE_CHECKING, Any, Self
 
+__all__ = ["ACTIVE_CONDITIONS", "as_trigger"]
+
 if TYPE_CHECKING:
     from .base import ActionCondition
 
-__all__: list[str] = ["as_trigger", "ACTIVE_CONDITIONS"]
+
+class _Conditions(dict["ActionCondition", Callable]): ...
 
 
-class Conditions(dict["ActionCondition", Callable]):
-    ...
-
-
-ACTIVE_CONDITIONS = Conditions()
+ACTIVE_CONDITIONS = _Conditions()
 
 
 class _ProxyMethodDescriptor:
@@ -27,7 +26,7 @@ class _ProxyMethodDescriptor:
         self.func = self.func.__get__(self.obj, self.obj.__class__)
         return self
 
-    def setup_trigger(self, condition: "ActionCondition") -> None:
+    def do_when(self, condition: "ActionCondition") -> None:
         ACTIVE_CONDITIONS[condition] = self.func
 
     def __call__(self, *args: Any, **kwds: Any) -> Any:
