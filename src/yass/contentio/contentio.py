@@ -1,11 +1,10 @@
 from asyncio import to_thread
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field, is_dataclass, replace
-from functools import partial, reduce
+from functools import reduce
 from inspect import BoundArguments, Signature, signature
 from io import BytesIO
 from itertools import chain
-from pathlib import Path
 from pprint import pprint
 from typing import Any, Generic, Protocol, Self, TypeAlias, TypeVar, cast
 
@@ -15,15 +14,21 @@ from ._helpers import *
 from .common import *
 
 __all__ = [
-    "reg_input",
-    "reg_output",
-    "deserialize",
-    "serialize",
+    "DataProxy",
+    "DataProxyProto",
+    "IOBoundPipeline",
+    "PathSegment",
+    "PathTemplate",
+    "Proxied",
+    "WrapperNewMixin",
+    "allowed_datatypes",
     "create_datatype",
     "create_io_context",
-    "_IOContext",
-    "DataProcPipeline",
-    "PathTemplate",
+    "datatype_info",
+    "deserialize",
+    "reg_input",
+    "reg_output",
+    "serialize",
 ]
 
 
@@ -72,17 +77,13 @@ Proxied = TypeVar("Proxied", covariant=True)
 class DataProxyProto(Protocol[Proxied]):
     data_format: str
 
-    def to_bytes(self) -> bytes:
-        ...
+    def to_bytes(self) -> bytes: ...
 
-    def convert(self, format: str) -> Self:
-        ...
+    def convert(self, format: str) -> Self: ...
 
-    def get_repr(self) -> Proxied:
-        ...
+    def get_repr(self) -> Proxied: ...
 
-    def __getattr__(self) -> Any:
-        ...
+    def __getattr__(self) -> Any: ...
 
 
 class WrapperNewMixin(Generic[Proxied]):
@@ -139,106 +140,105 @@ def create_datatype(
     extra_args_in: dict = {},
     output_func: Callable,
     extra_args_out: dict = {},
-) -> type[DataProxyProto]:
-    new_dtype: type[DataProxyProto] = type(
-        format_name.capitalize(), (DataProxy,), {}
-    )  # type: ignore[type]
-    new_dtype.data_format = format_name
+) -> None:
     if not format_name in INPUT_MAP or not format_name in OUTPUT_MAP:
         reg_input(format_name, input_func, extra_args_in)
         reg_output(format_name, output_func, extra_args_out)
-    datatype_registry[format_name] = new_dtype
-    return new_dtype
+    else:
+        msg = "Данный тип данных уже зарегистрирован"
+        raise RuntimeError(msg)
 
 
-DataTypeInfo: TypeAlias = dict[str, dict[str, Any]]
+_DataTypeInfo: TypeAlias = dict[str, dict[str, Any]]
 
 
-def allowed_datatypes(*, display: bool = False) -> list[DataTypeInfo]:
-    ndrows: list[DataTypeInfo] = [datatype_info(k) for k in datatype_registry]
+def allowed_datatypes(*, display: bool = False) -> list[_DataTypeInfo]:
+    ndrows: list[_DataTypeInfo] = [datatype_info(k) for k in INPUT_MAP]
     if display:
         for row in ndrows:
             pprint(row, depth=2, sort_dicts=False)
     return ndrows
 
 
-def datatype_info(datatype: str) -> DataTypeInfo:
-    info: DataTypeInfo = {
-        datatype: {
-            "type": datatype_registry.get(datatype),
-            "output func": OUTPUT_MAP.get(datatype),
-            "input func": INPUT_MAP.get(datatype),
-            "data container": signature(
-                INPUT_MAP.get(datatype)
-            ).return_annotation,
+def datatype_info(datatype: str) -> _DataTypeInfo:
+    if datatype in INPUT_MAP:
+        info: _DataTypeInfo = {
+            datatype: {
+                "output func": OUTPUT_MAP.get(datatype),
+                "input func": INPUT_MAP.get(datatype),
+                "data container": signature(
+                    INPUT_MAP.get(datatype)  # type: ignore
+                ).return_annotation,
+            }
         }
-    }
-    return info
+        return info
+    else:
+        msg = f"Тип данных {datatype} не зарегистрирован"
+        raise KeyError(msg)
 
 
-from jinja2 import Template
+@dataclass
+class PathSegment:
+    concatenator: str
+    segment_order: int = field(compare=True)
+    segment_parts: list[str | Callable] = field(default_factory=list)
 
-Placeholder = dict[str, Any]
+    def add_part(self, *part: str) -> None:
+        self.segment_parts.extend(part)
+
+    def change_concat(self, concatenator: str) -> Self:
+        kwds: dict[str, Any] = locals()
+        return replace(kwds.pop("self"), **kwds)
+
+    def __str__(self) -> str:
+        str_represent: list[str] = list(
+            map(lambda x: f"{x()}" if callable(x) else x, self.segment_parts)
+        )
+        return self.concatenator.join(str_represent)
 
 
 class PathTemplate:
     def __init__(
+        self, segments: list[PathSegment] = [], is_local: bool = False
+    ) -> None:
+        self.segments: list[PathSegment] = segments
+        self.is_local: bool = is_local
+
+    def add_segment(
         self,
-        file_part: Placeholder,
-        *,
-        root_part: Placeholder = {},
-        folder_part: Placeholder = {},
-        delim: str = "_",
-    ):
-        self.root_part: Placeholder = root_part
-        self.folder_part: Placeholder = folder_part
-        self.file_part: Placeholder = file_part
-        self.delim: str = delim
-
-    def render_path(self):
-        part_list: list[partial[str]] = [
-            self.make_part(part, self.delim)
-            for part in self._get_placeholders()
-            if part
-        ]
-        part_str: list[str] = [part() for part in part_list]
-        path: str | Path = r"/".join(part_str).replace(" ", self.delim)
-        return str(path)
-
-    def with_ext(self, ext: str) -> str:
-        return self.render_path() + f".{ext}"
-
-    def _get_placeholders(self) -> tuple[Placeholder, ...]:
-        return tuple(
-            v for v in self.__dict__.values() if v and isinstance(v, dict)
+        concatenator: str,
+        segment_order: int,
+        segment_parts: list[str | Callable[..., Any]],
+    ) -> None:
+        self.segments.append(
+            PathSegment(concatenator, segment_order, segment_parts)
         )
 
-    @staticmethod
-    def make_part(placeholders: Placeholder, delim: str) -> partial[str]:
-        start, end = "{{ ", " }}"
-        parts: list[str] = []
-        for key, value in placeholders.items():
-            if callable(value):
-                key = key + "()"
-            s = start + key + end
-            parts.append(s)
-        res: str = delim.join(parts)
-        tpl = Template(res)
-        return partial(tpl.render, placeholders)
-
-    def __str__(self):
-        return self.render_path()
-
-
-empty_eor_checker = lambda x: x
+    def render_path(self, ext: str = "") -> str:
+        self.segments.sort(key=lambda x: x.segment_order)
+        nonull_segments = map(
+            lambda x: str(x),
+            filter(lambda x: x.__str__() != "", self.segments),
+        )
+        nonull_segments = cast(Iterable[str], nonull_segments)
+        if self.is_local or (platform == "linux" and not self.is_local):
+            sep = os.sep
+        elif platform == "win32" and not self.is_local:
+            sep = cast(str, os.altsep)
+        return (
+            sep.join(nonull_segments) + f".{ext}"
+            if ext
+            else sep.join(nonull_segments)
+        )
 
 
 @dataclass
-class DataProcPipeline:
-    binding_id: int = field()
+class IOBoundPipeline:
+    io_context: IOContext
     functions: list[Callable] = field(default_factory=list)
-    eor_checker: Callable = field(default=empty_eor_checker)
-    timeout: int = field(default=20)
+    timeout: int = field(default=10)
+    on_error: Callable = lambda x: x
+    data_filter: Callable = lambda x: True
 
     def step(self, order: int, *, extra_kwargs: dict[str, Any] = {}):
         def wrapper(func):
