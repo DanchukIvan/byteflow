@@ -1,251 +1,134 @@
-import warnings
 from collections import defaultdict
-from collections.abc import Callable, Iterable
-from dataclasses import KW_ONLY, dataclass
-from functools import update_wrapper
-from inspect import isabstract
-from itertools import takewhile
-from types import NoneType
+from collections.abc import Callable
+from itertools import chain
 from typing import (
     Any,
     Generic,
-    ParamSpec,
     Protocol,
-    Self,
+    TypeGuard,
     TypeVar,
-    Union,
     cast,
-    get_args,
-    get_origin,
-    overload,
+    runtime_checkable,
 )
 
-__all__ = ["YassCore", "YassMeta"]
+from beartype import beartype
 
-TYassClass = TypeVar("TYassClass", covariant=True)
-PYassClass = ParamSpec("PYassClass")
-factory_registry: dict[type, dict[str, type]] = defaultdict(dict)
-
-
-@overload
-def _get_init_args(var: type) -> tuple[None, None]:
-    ...
-
-
-@overload
-def _get_init_args(var: type) -> tuple[type, None]:
-    ...
+__all__ = [
+    "AYC",
+    "EmptyClass",
+    "SingletonMixin",
+    "YassCore",
+    "get_all_factories",
+    "get_factory",
+    "is_empty_instance",
+    "make_empty_instance",
+    "reg_type",
+]
 
 
-@overload
-def _get_init_args(var: type) -> tuple[type[Iterable] | type[Any], type[Any]]:
-    ...
+class SingletonMixin:
+    """
+    A mixin that turns a class into a Singleton.
 
+    Raises:
+        RuntimeError: the error occurs when trying to create more than one instance of a class.
+    """
 
-DescriptorArgs = (
-    tuple[None, None]
-    | tuple[type, None]
-    | tuple[type[Iterable] | type[Any], type[Any]]
-    | None
-)
+    _instances: int = 0
 
-
-def _get_init_args(var: type) -> DescriptorArgs:
-    new_args: list[Any] = []
-    try:
-        yass_base = YassCore
-    except NameError:
-        return None, None
-    while var:
-        if hasattr(var, "__args__"):
-            if attrib := list(
-                takewhile(
-                    lambda x: YassCore in x.mro(), getattr(var, "__args__")
-                )
-            ):
-                origin: Any = get_origin(var)
-                if (
-                    origin
-                    and origin is not Union
-                    and issubclass(origin, Iterable)
-                ):
-                    return attrib[0], origin  # type: ignore
-            args = list(get_args(var))
-            new_args.extend(args)
-            var = new_args.pop()
+    def __new__(cls, *args, **kwargs):
+        """
+        A modified new method in which the number of instances of the class is controlled via the _instances variable.
+        """
+        if cls._instances == 0:
+            cls._instances += 1
+            return super().__new__(cls)
         else:
-            if YassCore in var.mro():
-                return var, None
-            if new_args:
-                var = new_args.pop()
-            else:
-                return None, None
+            msg = f"Невозможно инициализировать более одного экземпляра {cls.__name__}"
+            raise RuntimeError(msg) from None
 
 
-def _configure_attrs(attr_type: type) -> tuple[Any, Any]:
-    _class, container = _get_init_args(attr_type)
-    return _class, container
+_AC = TypeVar("_AC", bound="YassCore")
+AYC = TypeVar("AYC", covariant=True)
 
 
-iterable_handlers: dict[type, Callable] = {}
-
-
-def _iter_handler(container_type: type[Iterable]) -> Callable[..., Any]:
-    def registration(func: Callable) -> Callable:
-        iterable_handlers[container_type] = func
-        return func
-
-    return registration
-
-
-_iter_handler(list)(lambda _list, value: _list.append(value))
-_iter_handler(dict)(lambda _dict, key, value: _dict.update({key: value}))
-_iter_handler(set)(lambda _set, value: _set.add(value))
-_iter_handler(tuple)(lambda _tuple, value: _tuple + (value,))
-
-
-class NOCONVERT:
-    """Константа - маркер, запрещающая конвертацию аттрибута, аннотированного типом YassCore,
-    в фабрику"""
-
-
-NOCONVERTATTR: object = NOCONVERT()
-
-ClassRegistry = dict[type[TYassClass], dict[str, type[TYassClass]]]
-SubclassRegistry = dict[str, type[TYassClass]]
-ClassFactory = Callable[[str, str], Callable[[Any, Any], TYassClass]]
-ClassInitializer = Callable[[Any, Any], TYassClass]
-
-
-class FactoryField(Generic[TYassClass]):
-    _registry: ClassRegistry = cast(ClassRegistry, factory_registry)
-
-    def __init__(self):
-        self._container: Iterable[TYassClass] | TYassClass | None = None
-        self._concrete_factory: SubclassRegistry = {}
-        self._name: str = ""
-
-    def __set_name__(self, instance: object, name: str):
-        if not self._name:
-            self._name = name
-            self._update_init(instance)
-
-    @overload
-    def __get__(self, instance, owner=None) -> Self:
-        ...
-
-    @overload
-    def __get__(self, instance, owner=None) -> TYassClass:
-        ...
-
-    @overload
-    def __get__(self, instance, owner=None) -> None:
-        ...
-
-    @overload
-    def __get__(self, instance, owner=None) -> Iterable[TYassClass]:
-        ...
-
-    def __get__(
-        self, instance, owner=None
-    ) -> Self | Iterable[TYassClass] | TYassClass | None:
-        if instance._edit_mode:
-            instance._edit_mode = False
-            return self
-        return self._container
-
-    def _update_init(self, instance: object) -> None:
-        attr_annot: type = instance.__annotations__[self._name]
-        _class, container = _configure_attrs(attr_annot)
-        self._container = (
-            container if not issubclass(container, Iterable) else container()
-        )
-        self._concrete_factory = factory_registry[_class]
-        self._updated = True
-
-    def __call__(
-        self, subcls_key: str, bound_name: str = ""
-    ) -> ClassInitializer[TYassClass]:
-        _class: type[TYassClass] = self._concrete_factory[subcls_key]
-
-        def wrapper(*args: Any, **kwargs: Any) -> TYassClass:
-            attr_instance: TYassClass = _class(*args, **kwargs)
-            self._update_container(attr_instance, bound_name)
-            return attr_instance  # возвращаем объект для дальнейшей настройки/использования
-
-        return update_wrapper(wrapper, _class)
-
-    # TODO: нужно сделать более универсальную функцию
-    def _update_container(self, ioc, bound_name):
-        container_type = type(self._container)
-        if container_type is not NoneType:
-            func: Callable = iterable_handlers[container_type]
-            if issubclass(container_type, dict) and bound_name:
-                key: str | bool = getattr(ioc, bound_name, False)
-                if key and not callable(key):
-                    return func(self._container, key, ioc)
-                else:
-                    raise NameError(
-                        "Необходимо задать имя аттрибута объекта, значение которого будет использоваться в качестве ключа"
-                    )
-            else:
-                func(self._container, ioc)
-        self._container = ioc
-
-
-class YassCoreMeta(type):
-    _registry: dict[type, dict[str, type]] = factory_registry
-
-    def __new__(
-        mcls,
-        name: str,
-        bases: tuple,
-        namespace: dict[str, Any],
-        *,
-        subcls_key: str = "",
-    ) -> type:
-        instance: type = super().__new__(mcls, name, bases, namespace)
-        if bases:
-            mcls._update_registry(instance, subcls_key)
-        return instance
-
+@runtime_checkable
+class YassCore(Protocol):
     @classmethod
-    def _update_registry(cls, new_class: type, subcls_key: str = ""):
-        keys: list[type] = [
-            key for key in cls._registry.keys() if issubclass(new_class, key)
-        ]
-        if keys and not isabstract(new_class):
-            key = keys[0]
-            if subcls_key:
-                cls._registry[key][subcls_key] = new_class
-            else:
-                msg = f"Отсутствует subcls_key, подкласс {new_class} не будет зарегистрирован в регистре классов"
-                warnings.warn(msg)
-        else:
-            cls._registry[new_class]
+    def available_impl(cls: type) -> dict[str, type[_AC]]:
+        _cls_ns: dict[str, type[_AC]] = get_factory(cls)
+        return _cls_ns
 
 
-class YassMeta(type(Protocol), YassCoreMeta):
-    ...
+class _F_ACtoryRepo(
+    SingletonMixin, defaultdict[type[_AC], dict[str, type[_AC]]]
+): ...
 
 
-@dataclass
-class YassCore(metaclass=YassMeta):
-    _: KW_ONLY
-    _edit_mode: bool = False
-
-    @property
-    def available_impl(self):
-        for superclass in factory_registry:
-            if issubclass(type(self), superclass):
-                subcls_series: list[tuple[str, type]] = [
-                    (k, v) for k, v in factory_registry[superclass].items()
-                ]
-                return subcls_series
-            else:
-                print("Not available implementation")
-                return []
+_FACTORY_REPO = _F_ACtoryRepo(dict)
 
 
-if __name__ == "__main__":
-    ...
+@beartype
+def reg_type(name: str) -> Callable[[type[_AC]], type[_AC]]:
+    if name in list(chain(*[_FACTORY_REPO.values()])):
+        msg = "Конфликт имен: такое имя уже зарегистрировано в репозитории классов."
+        raise AttributeError(msg) from None
+
+    def wrapped_subcls(_cls: type[_AC]) -> type[_AC]:
+        search_area = _cls.__mro__[::-1]
+        for _obj in filter(lambda x: issubclass(x, YassCore), search_area):
+            _cls_ns = _FACTORY_REPO[_obj]
+            _cls_ns[name] = _cls
+            break
+        return _cls
+
+    return wrapped_subcls
+
+
+@beartype
+def get_factory(id: str | type) -> dict[str, type[_AC]]:
+    if isinstance(id, str):
+        ns: dict[str, type[_AC]]
+        for ns in filter(lambda x: id in x, _FACTORY_REPO.values()):
+            return ns
+    else:
+        for key in filter(lambda x: issubclass(id, x), _FACTORY_REPO.keys()):
+            return _FACTORY_REPO[key]
+    msg = "Ни один класс не зарегистрирован под данным идентификатором."
+    raise AttributeError(msg)
+
+
+def get_all_factories() -> (
+    defaultdict[type[YassCore], dict[str, type[YassCore]]]
+):
+    return _FACTORY_REPO
+
+
+_MC = TypeVar("_MC")
+
+
+class EmptyClass(Generic[_MC]):
+    def __new__(cls, proxy: type[_MC]) -> _MC:
+        instance = super().__new__(cls)
+        new_cls: _MC = cast(proxy, instance)
+        return new_cls
+
+    def __init__(self, proxy: type[_MC]):
+        self.empty = True
+
+    def __bool__(self):
+        return False
+
+    def __getattribute__(self, __name: str) -> Any:
+        msg = "Пустой класс является заглушкой и не имеет аттрибутов или методов."
+        raise RuntimeError(msg) from None
+
+
+@beartype
+def make_empty_instance(cls: type[_MC]) -> _MC:
+    return EmptyClass(cls)
+
+
+@beartype
+def is_empty_instance(instance: _MC | type[_MC]) -> TypeGuard[EmptyClass]:
+    return getattr(instance, "empty", False)
