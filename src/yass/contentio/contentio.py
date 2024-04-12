@@ -1,26 +1,27 @@
+from __future__ import annotations
+
+import os
 from asyncio import to_thread
-from collections.abc import Callable, Coroutine
-from dataclasses import dataclass, field, is_dataclass, replace
+from collections.abc import Callable, Coroutine, Iterable
+from dataclasses import dataclass, field, replace
 from functools import reduce
-from inspect import BoundArguments, Signature, signature
+from inspect import signature
 from io import BytesIO
 from itertools import chain
 from pprint import pprint
-from typing import Any, Generic, Protocol, Self, TypeAlias, TypeVar, cast
+from sys import platform
+from typing import IO, TYPE_CHECKING, Any, Self, TypeAlias, cast
 
-from fsspec.asyn import AsyncFileSystem
+if TYPE_CHECKING:
+    from yass.storages import BaseBufferableStorage
 
-from ._helpers import *
-from .common import *
+from yass.contentio._helpers import *
+from yass.contentio.common import *
 
 __all__ = [
-    "DataProxy",
-    "DataProxyProto",
     "IOBoundPipeline",
     "PathSegment",
     "PathTemplate",
-    "Proxied",
-    "WrapperNewMixin",
     "allowed_datatypes",
     "create_datatype",
     "create_io_context",
@@ -32,7 +33,9 @@ __all__ = [
 ]
 
 
-def reg_input(extension: str, func: Callable, extra_args: dict[str, Any] = {}):
+def reg_input(
+    extension: str, func: Callable, extra_args: dict[str, Any] = {}
+) -> None:
     if _check_input_sig(func):
         func = _update_sign(func, extra_args) if extra_args else func
     else:
@@ -56,9 +59,9 @@ def reg_output(
 
 def deserialize(
     content: bytes, format: str, extra_args: dict[str, Any] = {}
-) -> "Proxied":
-    func: Callable[..., Proxied] = INPUT_MAP[format]
-    dataobj: Proxied = func(content, **extra_args)
+) -> Any:
+    func: Callable[[bytes, dict], Any] = INPUT_MAP[format]
+    dataobj: Any = func(content, **extra_args)
     return dataobj
 
 
@@ -66,71 +69,9 @@ def serialize(
     dataobj: object, format: str, extra_args: dict[str, Any] = {}
 ) -> bytes:
     byte_buf = BytesIO()
-    func = OUTPUT_MAP[format]
+    func: Callable[[Any, IO, dict], Any] = OUTPUT_MAP[format]
     func(dataobj, byte_buf, **extra_args)
     return byte_buf.getvalue()
-
-
-Proxied = TypeVar("Proxied", covariant=True)
-
-
-class DataProxyProto(Protocol[Proxied]):
-    data_format: str
-
-    def to_bytes(self) -> bytes: ...
-
-    def convert(self, format: str) -> Self: ...
-
-    def get_repr(self) -> Proxied: ...
-
-    def __getattr__(self) -> Any: ...
-
-
-class WrapperNewMixin(Generic[Proxied]):
-    def __new__(cls: type, wrapped: Proxied) -> Proxied:
-        new_cls: cls = cast(cls, type(wrapped))
-        return super().__new__(new_cls)
-
-
-class DataProxy(DataProxyProto, WrapperNewMixin[Proxied]):
-    data_format: str
-
-    def __new__(cls, content: bytes) -> Proxied:
-        try:
-            wrapped: Proxied = INPUT_MAP[cls.data_format](content)
-        except KeyError as exc:
-            raise RuntimeError(
-                "Не зарегистрировано ни одной функции ввода-вывода для данного типа данных"
-            ) from exc
-        return super().__new__(cls, wrapped)
-
-    def __init__(self, wrapped: Proxied):
-        self.data: Proxied = wrapped
-        self.dataformat = self.data_format
-
-    @property
-    def extension(self):
-        return self.data_format
-
-    def to_bytes(self) -> bytes:
-        bytes_repr: bytes = serialize(self, self.dataformat)
-        return bytes_repr
-
-    def convert(self, format: str) -> None:
-        self.dataformat = format
-
-    def get_repr(self) -> Proxied:
-        return self.data
-
-    def __getattr__(self, name: str):
-        return getattr(self.data, name)
-
-    def __str__(self) -> str:
-        return self.data_format
-
-
-# TODO: нам не нужны разные прокси-типы
-datatype_registry: dict[str, type[DataProxyProto]] = {}
 
 
 def create_datatype(
@@ -369,44 +310,21 @@ class _IOContext:
     def update_ctx(
         self,
         *,
-        target: object | None = None,
         in_format: str | None = None,
         out_format: str | None = None,
-        engine: AsyncFileSystem | None = None,
+        storage: BaseBufferableStorage | None = None,
         path_temp: PathTemplate | None = None,
     ) -> Self:
-        kwds: dict[str, Any] = {k: v for k, v in locals() if v}
+        default_params = vars(self)
+        kwds: dict[str, Any] = {k: v for k, v in locals() if v is not None}
         kwds.pop("self")
-        if is_dataclass(self):
-            return replace(self, **kwds)
-        else:
-            sig: Signature = signature(type(self))
-            bind: BoundArguments = sig.bind_partial(**kwds)
-            self.__dict__.update(bind.kwargs)
-            return self
+        default_params.update(kwds)
+        return self.__class__(**kwds)
 
 
 def create_io_context(
-    *,
-    target: object,
-    in_format: str,
-    out_format: str,
-    storage_proto: str,
-    storage_kwargs: dict,
-) -> _IOContext:
-    kwargs: dict[str, Any] = {
-        k: v for k, v in locals().items() if v is not None
-    }
-    ctx = _IOContext(**kwargs)
-    IOCONTEXT_MAP[id(target)].append(ctx)
+    *, in_format: str, out_format: str, storage: BaseBufferableStorage
+) -> IOContext:
+    kwargs: dict[str, Any] = {k: v for k, v in locals().items()}
+    ctx = IOContext(**kwargs)
     return ctx
-
-
-if __name__ == "__main__":
-    ...
-    # import polars
-    # overloadeds = get_overloads(polars.read_json) or [polars.read_json]
-    # ann = signature(polars.read_csv).return_annotation
-    # ann2 = list(signature(polars.DataFrame.write_csv).parameters.values())[1].annotation
-    # print(_resolve_annotation(ann, str(polars.read_csv.__module__)))
-    # print(_resolve_annotation(ann2, str(polars.DataFrame.write_csv.__module__)))
