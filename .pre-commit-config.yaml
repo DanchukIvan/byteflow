@@ -21,6 +21,7 @@ repos:
     rev: v2.2.6
     hooks:
       - id: codespell
+        args: ["-L", "asend"]
   - repo: https://github.com/hadialqattan/pycln
     rev: v2.4.0
     hooks:
