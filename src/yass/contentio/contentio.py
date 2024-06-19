@@ -1,3 +1,7 @@
+"""
+This module provides functions and classes responsible for input/output and serialization/deserialization of content.
+"""
+
 from __future__ import annotations
 
 import os
@@ -28,7 +32,6 @@ __all__ = [
     "allowed_datatypes",
     "create_datatype",
     "create_io_context",
-    "datatype_info",
     "deserialize",
     "reg_input",
     "reg_output",
@@ -39,6 +42,17 @@ __all__ = [
 def reg_input(
     extension: str, func: Callable, extra_args: dict[str, Any] = {}
 ) -> None:
+    """
+    Registers a data deserialization function.
+
+    Args:
+        extension (str): The data format for which the function is intended (for example, json, csv, etc.).
+        func (Callable): Function for deserializing data.
+        extra_args (dict[str, Any], optional): Values of function arguments that need to be bound instead of the default ones. Defaults to {}.
+
+    Raises:
+        RuntimeError: thrown if the function fails validation. The error message indicates which part of the function is invalid.
+    """
     if _check_input_sig(func):
         func = _update_sign(func, extra_args) if extra_args else func
     else:
@@ -51,6 +65,17 @@ def reg_input(
 def reg_output(
     extension, func: Callable, extra_args: dict[str, Any] = {}
 ) -> None:
+    """
+    Registers a data serialization function.
+
+    Args:
+        extension (str): The data format for which the function is intended (for example, json, csv, etc.).
+        func (Callable): Function for deserializing data.
+        extra_args (dict[str, Any], optional): Values of function arguments that need to be bound instead of the default ones. Defaults to {}.
+
+    Raises:
+        RuntimeError: Thrown if the function fails validation. The error message indicates which part of the function is invalid.
+    """
     if _check_output_sig(func):
         func = _update_sign(func, extra_args) if extra_args else func
     else:
@@ -63,6 +88,20 @@ def reg_output(
 def deserialize(
     content: bytes, format: str, extra_args: dict[str, Any] = {}
 ) -> Any:
+    """
+    Deserializes byte content into an object of the specified format.
+
+    Args:
+        content (bytes): Content received in byte representation.
+        format (str): The format of the data that the resource provides.
+        extra_args (dict[str, Any], optional): Values of function arguments that need to be bound instead of the default ones. Defaults to {}.
+
+    Raises:
+        KeyError: thrown if there is no registered function of the given format.
+
+    Returns:
+        Any: data object of any type (for example, pandas df, polars df, dict from json, etc.).
+    """
     func: Callable[[bytes, dict], Any] = INPUT_MAP[format]
     dataobj: Any = func(content, **extra_args)
     return dataobj
@@ -71,6 +110,20 @@ def deserialize(
 def serialize(
     dataobj: object, format: str, extra_args: dict[str, Any] = {}
 ) -> bytes:
+    """
+    _summary_
+
+    Args:
+        dataobj (object): data object of any type (for example, pandas df, polars df, dict from json, etc.).
+        format (str): the target data format in which the object should be written. The required format is determined by the user.
+        extra_args (dict[str, Any], optional): Values of function arguments that need to be bound instead of the default ones. Defaults to {}.
+
+    Raises:
+        KeyError: thrown if there is no registered function of the given format.
+
+    Returns:
+        bytes: Byte representation of content.
+    """
     byte_buf = BytesIO()
     func: Callable[[Any, IO, dict], Any] = OUTPUT_MAP[format]
     func(dataobj, byte_buf, **extra_args)
@@ -84,8 +137,26 @@ def create_datatype(
     extra_args_in: dict = {},
     output_func: Callable,
     extra_args_out: dict = {},
+    replace: bool = False,
 ) -> None:
-    if not format_name in INPUT_MAP or not format_name in OUTPUT_MAP:
+    """
+    Registers a new data format and functions for processing content of the specified format.
+
+    Args:
+        format_name (str): Target data format.
+        input_func (Callable): Function for deserializing data.
+        output_func (Callable): Function for serializing data.
+        extra_args_in (dict, optional): Values of deserializing function arguments that need to be bound instead of the default ones. Defaults to {}.
+        extra_args_out (dict, optional): the same for the serialization function.. Defaults to {}.
+
+    Raises:
+        RuntimeError: thrown if the data format is already registered.
+    """
+    if (
+        not format_name in INPUT_MAP
+        or not format_name in OUTPUT_MAP
+        or replace
+    ):
         reg_input(format_name, input_func, extra_args_in)
         reg_output(format_name, output_func, extra_args_out)
     else:
@@ -97,14 +168,35 @@ _DataTypeInfo: TypeAlias = dict[str, dict[str, Any]]
 
 
 def allowed_datatypes(*, display: bool = False) -> list[_DataTypeInfo]:
-    ndrows: list[_DataTypeInfo] = [datatype_info(k) for k in INPUT_MAP]
+    """
+    Returns the currently registered and therefore available for processing data formats.
+
+    Args:
+        display (bool, optional): Outputting a list of data formats to the console. Defaults to False.
+
+    Returns:
+        list[_DataTypeInfo]: list of available data formats.
+    """
+    ndrows: list[_DataTypeInfo] = [_datatype_info(k) for k in INPUT_MAP]
     if display:
         for row in ndrows:
             pprint(row, depth=2, sort_dicts=False)
     return ndrows
 
 
-def datatype_info(datatype: str) -> _DataTypeInfo:
+def _datatype_info(datatype: str) -> _DataTypeInfo:
+    """
+    Helper function for formatting information about registered content types.
+
+    Args:
+        datatype (str): name of the registered data type (for example, json, csv, etc).
+
+    Raises:
+        KeyError: thrown if the content type is not registered.
+
+    Returns:
+        _DataTypeInfo: a dictionary containing information about the format of the content.
+    """
     if datatype in INPUT_MAP:
         info: _DataTypeInfo = {
             datatype: {
@@ -117,20 +209,47 @@ def datatype_info(datatype: str) -> _DataTypeInfo:
         }
         return info
     else:
-        msg = f"Тип данных {datatype} не зарегистрирован"
+        msg = f"Тип данных {datatype} не зарегистрирован."
         raise KeyError(msg)
 
 
-@dataclass
+@dataclass(slots=True)
 class PathSegment:
+    """
+    Is a representation of the path fragment where the retrieved data is stored.
+    A collection of PathSegments represent the full path to the data storage location.
+
+    Args:
+        concatenator (str): literal through which parts of the segment will be combined.
+        segment_order (int): The position that the segment will occupy along the path.
+        segment_parts (list[str | Callable]): parts of the segment. There can be both callables that will be called to format a string
+                                                (for example, functions from the datetime package), and standard strings. Defaults to [].
+    """
+
     concatenator: str
     segment_order: int = field(compare=True)
     segment_parts: list[str | Callable] = field(default_factory=list)
 
-    def add_part(self, *part: str) -> None:
+    def add_part(self, *part: str | Callable) -> None:
+        """
+        The method adds an arbitrary number of elements to the list of parts.
+        The order of the elements matters to get the desired look of the path string.
+
+        Args:
+            part (str | Callable): strings or any functions. The argument accepts an unlimited number of parts.
+        """
         self.segment_parts.extend(part)
 
     def change_concat(self, concatenator: str) -> Self:
+        """
+        The method replaces the concatenator with a new one.
+
+        Args:
+            concatenator (str): any string.
+
+        Returns:
+            Self: segment with updated concatenator.
+        """
         kwds: dict[str, Any] = locals()
         return replace(kwds.pop("self"), **kwds)
 
@@ -142,6 +261,16 @@ class PathSegment:
 
 
 class PathTemplate:
+    """
+    The class manages a collection of segments and is responsible for generating the full path to the data as a string.
+    When generating the final path string, it takes into account the environment for which the path is being generated.
+    The generated paths are the address where the data is stored in the storage.
+
+    Args:
+        segments (list[PathSegment], optional): list of path segments. Defaults to [].
+        is_local (bool, optional): if set to True, then PathTemplate will form the path using the operating system path separator. Defaults to False.
+    """
+
     def __init__(
         self, segments: list[PathSegment] = [], is_local: bool = False
     ) -> None:
@@ -154,19 +283,33 @@ class PathTemplate:
         segment_order: int,
         segment_parts: list[str | Callable[..., Any]],
     ) -> None:
+        """
+        A factory method that allows you to generate a path segment.
+        The new segment is immediately added to the class field and is not returned.
+        For a description of the arguments, see PathSegment.
+        """
         self.segments.append(
             PathSegment(concatenator, segment_order, segment_parts)
         )
 
     def render_path(self, ext: str = "") -> str:
+        """
+        Generates and returns the data path. The optional ext parameter is used to add an extension to the path.
+
+        Args:
+            ext (str, optional): data format identifier. Defaults to "".
+
+        Returns:
+            str: path to data with or without extension.
+        """
         self.segments.sort(key=lambda x: x.segment_order)
         nonull_segments = map(
             lambda x: str(x),
             filter(lambda x: x.__str__() != "", self.segments),
         )
-        nonull_segments = cast(Iterable[str], nonull_segments)
+        nonull_segments: Iterable[str] = cast(Iterable[str], nonull_segments)
         if self.is_local or (platform == "linux" and not self.is_local):
-            sep = os.sep
+            sep: str = os.sep
         elif platform == "win32" and not self.is_local:
             sep = cast(str, os.altsep)
         return (
@@ -178,13 +321,42 @@ class PathTemplate:
 
 @dataclass
 class IOBoundPipeline:
+    """
+    The class is responsible for registering handler functions and applying them to incoming data.
+    Creates a separate thread for processing to avoid blocking the event loop.
+    The data is processed in batches, the size of which depends on the settings of the resource involved
+    and the current load on the resource. Each pipeline is inextricably linked to an I/O context, and
+    for any such context there can only be one pipeline.
+
+    Args:
+        io_context (IOContext): an I/O context object to which the pipeline will be associated.
+        functions (list[Callable]): list of registered functions. The order of the functions in the list directly indicates the order in which they are tried on.
+        on_error (Callable): Exception catching function. Can be used for specific exception handling. By default, it is a lambda function that returns
+                            any object passed to it unchanged.
+        data_filter (Callable): A function for filtering content for invalid blocks. Registered via the appropriate method. By default, it is a lambda function
+                            that returns any object passed to it unchanged.
+    """
+
     io_context: IOContext
     functions: list[Callable] = field(default_factory=list)
-    timeout: int = field(default=10)
     on_error: Callable = lambda x: x
     data_filter: Callable = lambda x: True
 
-    def step(self, order: int, *, extra_kwargs: dict[str, Any] = {}):
+    def step(
+        self, order: int, *, extra_kwargs: dict[str, Any] = {}
+    ) -> Callable:
+        """
+        Method for registering a handler function.
+
+        Args:
+            order (int): Position of the function in the pipeline. This argument ultimately determines the order in
+                        which handlers are applied to the data.
+            extra_kwargs (dict[str, Any], optional): Additional handler function arguments. Under the hood, _update_sign is applied. Defaults to {}.
+
+        Returns:
+            Callable: function registered as a data handler without modification.
+        """
+
         def wrapper(func):
             self._check_sig(func)
             updated_func: Callable = _update_sign(
@@ -195,16 +367,29 @@ class IOBoundPipeline:
 
         return wrapper
 
-    def error_handler(self, func: Callable):
-        self.on_error = func
+    def content_filter(self, func: Callable[..., bool]) -> None:
+        """
+        The method registers a function that is used to filter content. Such a function must return a boolean.
 
-    def content_filter(self, func: Callable[..., bool]):
+        Args:
+            func (Callable[..., bool]): any function containing user-relevant logic for validating content.
+        """
         self.data_filter = func
 
     @asynccontextmanager
     async def run_transform(
         self, dataobj: Iterable[Any]
     ) -> AsyncIterator[Future]:
+        """
+        The method starts the data processing process. At this stage, content is validated and filtered,
+        as well as its transformation in a separate thread.
+
+        Args:
+            dataobj (Iterable[Any]): batch with data objects of any type.
+
+        Yields:
+            AsyncIterator[Future]: asyncio futures (in the form of an asynchronous iterator) to wait for the processing of a data batch to complete.
+        """
         valid_content: list[Any] = [
             data for data in dataobj if self.data_filter(data)
         ]
@@ -223,12 +408,21 @@ class IOBoundPipeline:
 
     # TODO: нужно проверять, что тип возвращаемого значения функции обработки есть в аргументах функции десериализации входящих значений
     def _check_sig(self, func: Callable) -> None:
+        """
+        Utility method for checking the compatibility of registered processing functions.
+        This check is carried out by analyzing the signatures of registered functions.
+
+        Args:
+            func (Callable): a function registered as a handler.
+
+        Raises:
+            ValueError: thrown if the signature of the input (serialization) function and the handler function are incompatible.
+                        The discrepancy can be found in both the arguments and the return value.
+        """
         ctx: IOContext = self.io_context
         return_annot: type = signature(func).return_annotation
         if isinstance(return_annot, str):
-            return_annot = _resolve_annotation(
-                return_annot, str(func.__module__)
-            )[0]
+            return_annot = _resolve_annotation(return_annot, func)[0]
         func_args_annot: list[type] = list(
             chain(
                 *[
@@ -254,15 +448,23 @@ class IOBoundPipeline:
             raise ValueError(msg)
 
     def change_order(self, old_idx: int, new_idx: int) -> None:
+        """
+        The method changes the position of the function in the pipeline.
+
+        Args:
+            old_idx (int): old position.
+            new_idx (int): new position.
+        """
         func: Callable = self.functions.pop(old_idx)
         self.functions.insert(new_idx, func)
 
-    def get_functions(self) -> tuple[tuple[int, str], ...]:
-        return tuple(
-            (order, func.__name__) for order, func in enumerate(self.functions)
-        )
+    def show_pipline(self) -> str:
+        """
+        The method returns a string describing the chain of function calls in the pipeline.
 
-    def show_pipline(self):
+        Returns:
+            str: a chain of function calls as a string.
+        """
         ctx: IOContext = self.io_context
         pipe: list[str] = [
             f"{order}: {func.__name__}"
@@ -276,6 +478,18 @@ _EMPTY_PATHTEMP: PathTemplate = make_empty_instance(PathTemplate)
 
 
 class IOContext:
+    """
+    The I/O context class specifies the format of incoming and outgoing data (which may or may not be the same -
+    it all depends on the user's tasks) and also where the corresponding data is stored. Instances of this class
+    are required to create requests for resources and register data processing pipelines.
+    The context object also stores information about the data path pattern.
+
+    Args:
+        in_format (str): format of incoming data.
+        out_format (str): the format in which the data should be saved.
+        storage (BaseBufferableStorage): storage in which the data will be stored.
+    """
+
     def __init__(
         self,
         *,
@@ -288,26 +502,49 @@ class IOContext:
         self._check_io()
         self.storage: BaseBufferableStorage = storage
         self.path_temp: PathTemplate = _EMPTY_PATHTEMP
-        pipeline: IOBoundPipeline = _EMPTY_PIPELINE
+        self.pipeline: IOBoundPipeline = _EMPTY_PIPELINE
 
     @property
-    def out_path(self):
+    def out_path(self) -> str:
+        """
+        Path to save data with extension.
+
+        Returns:
+            str: path to the data in the storage.
+        """
         return self.path_temp.render_path(self.out_format)
 
-    @property
-    def in_path(self):
-        return self.path_temp.render_path(self.in_format)
-
     def attache_pipline(self) -> IOBoundPipeline:
+        """
+        Method creates and links a data processing pipeline.
+
+        Returns:
+            IOBoundPipeline: pipeline instance.
+        """
         self.pipeline = IOBoundPipeline(self)
         return self.pipeline
 
     def attache_pathgenerator(self) -> PathTemplate:
+        """
+        The method creates and binds an instance of the data path template.
+
+        Returns:
+            PathTemplate: data path template instance.
+        """
         path_temp = PathTemplate()
         self.path_temp = path_temp
         return path_temp
 
-    def _check_io(self):
+    def _check_io(self) -> bool:
+        """
+        A utility function that checks that an instance of a class can be created with the specified data formats.
+
+        Raises:
+            ValueError: thrown if the input and/or output data format is not registered.
+
+        Returns:
+            bool: returns True if all specified data formats are registered.
+        """
         try:
             in_obj = INPUT_MAP[self.in_format]
             out_obj = INPUT_MAP[self.out_format]
@@ -323,18 +560,30 @@ class IOContext:
         in_format: str | None = None,
         out_format: str | None = None,
         storage: BaseBufferableStorage | None = None,
-        path_temp: PathTemplate | None = None,
     ) -> Self:
+        """
+        The method updates context attributes.
+        """
         default_params = vars(self)
-        kwds: dict[str, Any] = {k: v for k, v in locals() if v is not None}
+        kwds: dict[str, Any] = {
+            k: v for k, v in locals().items() if v is not None
+        }
         kwds.pop("self")
         default_params.update(kwds)
-        return self.__class__(**kwds)
+        for attr, value in default_params.items():
+            setattr(self, attr, value)
+        return self
 
 
 def create_io_context(
     *, in_format: str, out_format: str, storage: BaseBufferableStorage
 ) -> IOContext:
+    """
+    Module level function for creating IO context instances. Accepts the arguments necessary to initialize objects of this type.
+
+    Returns:
+        IOContext: new instance of IOContext.
+    """
     kwargs: dict[str, Any] = {k: v for k, v in locals().items()}
     ctx = IOContext(**kwargs)
     return ctx

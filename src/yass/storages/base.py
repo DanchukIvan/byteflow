@@ -4,6 +4,7 @@ The module contains only the base class of the storage manager, from which all o
 
 from __future__ import annotations
 
+from _collections_abc import dict_items
 from abc import abstractmethod
 from asyncio import Lock, create_task
 from collections.abc import (
@@ -20,7 +21,6 @@ from threading import Lock as ThreadLock
 from typing import TYPE_CHECKING, Any, Literal, Protocol, Self, TypeAlias
 from weakref import WeakValueDictionary
 
-from _collections_abc import dict_items
 from rich.pretty import pprint as rpp
 
 from yass.contentio import serialize
@@ -58,6 +58,15 @@ AnyDataobj: TypeAlias = Any
 
 
 def engine_factory(*_cls: type):
+    """
+    The function registers factories for backend engines. The backend can be file storage,
+    object storage, databases, buses and message brokers. Each backend has its own factory class,
+    which can either generalize a group of backends or correspond to only one backend.
+
+    Args:
+        _cls (type): a sequence of classes to which the engine factory is assigned.
+    """
+
     def wrapped_func(func: Callable):
         _ENGINE_FACTORIES[_cls] = func
         return func
@@ -66,6 +75,15 @@ def engine_factory(*_cls: type):
 
 
 def _get_engine_factory(key: type):
+    """
+    The function returns the engine factory for the given backend class.
+
+    Args:
+        key (type): the class to which the engine factory needs to be provided.
+
+    Raises:
+        KeyError: thrown if no factory is registered for this backend class.
+    """
     for t in filter(lambda x: key in x, _ENGINE_FACTORIES.keys()):
         return _ENGINE_FACTORIES[t]
     msg = "Фабрика движков для данного класса не зарегистрирована."
@@ -77,6 +95,21 @@ def supported_engine_factories():
 
 
 class ContentQueue:
+    """
+    This class buffers content in memory, namely by placing it in a dictionary.
+    Its main purpose is to avoid repeated I/O, which can significantly affect performance.
+    The class also provides additional information about the stored content
+    (size of memory allocated by objects, their number).
+    The class also allows you to check whether a data object is in a queue
+    and to loop through the path-data object pairs stored in the queue.
+    In-memory buffers are used by data collectors to temporarily store downloaded content.
+
+    Args:
+        storage (BaseBufferableStorage): backend for which the queue is created.
+        in_format (str): input data format.
+        out_format (str): data upload format.
+    """
+
     def __init__(
         self, storage: BaseBufferableStorage, in_format: str, out_format: str
     ):
@@ -88,6 +121,9 @@ class ContentQueue:
 
     @asynccontextmanager
     async def block_state(self) -> AsyncGenerator[Self, Any]:
+        """
+        The method locks the state of the buffer while working with it. The lock that is called is asynchronous.
+        """
         try:
             await self.internal_lock.acquire()
             yield self
@@ -98,6 +134,15 @@ class ContentQueue:
                 self.internal_lock.release()
 
     async def parse_content(self, content: Iterable) -> None:
+        """
+        The method parses the container with content on the path and the directly loaded
+        content and distributes it in a queue. Based on the results of content distribution,
+        it updates the time of the last data fixation in the backend and the statistics
+        of downloaded data.
+
+        Args:
+            content (Iterable): a container with a path string where the content should be stored in the future, and data.
+        """
         for path, dataobj in content:
             self.queue[path] = dataobj
         rpp(f"Количество объектов в буфере {len(self.queue)}")
@@ -108,18 +153,47 @@ class ContentQueue:
         if self.storage.check_limit():
             create_task(self.storage.merge_to_backend(self))
 
-    def get_content(self, path: str) -> AnyDataobj:
-        return self.queue.get(path, False)
+    def get_content(self, path: str) -> AnyDataobj | None:
+        """
+        Returns the content that is stored at the given path.
+
+        Args:
+            path (str): the path string where the content is stored.
+
+        Returns:
+            AnyDataobj (optional): any data object that is captured in a buffer. If the object is not stored
+                                in the given path (for example, the queue was cleared after uploading to the
+                                backend), then None is returned.
+        """
+        return self.queue.get(path, None)
 
     def get_all_content(self) -> chain[AnyDataobj]:
+        """
+        The method wraps the content queue in a generator that produces values in the order in which the content was committed to the queue.
+
+        Returns:
+            chain[AnyDataobj]: all data objects (without paths) currently present in the buffer, wrapped in a generator.
+        """
         return chain(self.queue.values())
 
     @property
     def size(self) -> int:
+        """
+        The property returns the length of the queue or, in other words, the number of objects in it.
+
+        Returns:
+            int: number of objects in the queue.
+        """
         return len(self.queue)
 
     @property
     def memory_size(self) -> int | float:
+        """
+        The property returns the amount of allocated memory in megabytes.
+
+        Returns:
+            int | float: memory occupied by data in megabytes.
+        """
         bytes_mem: int = sum(
             len(serialize(data, self.out_format))
             for data in self.get_all_content()
@@ -127,17 +201,30 @@ class ContentQueue:
         return scale_bytes(bytes_mem, "mb")
 
     def reset(self) -> None:
+        """
+        The method clears the queue of all objects. As a rule,
+        it is used at the end of the process of uploading data to the backend.
+        """
         self.queue.clear()
 
     def __contains__(self, item: AnyDataobj) -> bool:
         return item in self.queue
 
     def __iter__(self) -> Generator[tuple[str, Any], Any, None]:
+        """
+        When iterating, the method returns a pair of path and data object.
+
+        Yields:
+            Generator[tuple[str, Any], Any, None]: generator that returns the target path and data.
+        """
         yield from self.queue.items()
 
 
 class BufferDispatcher:
     def __init__(self):
+        """
+        This class accumulates information about the in-memory buffers used by the backend, and also provides a method for creating such buffers.
+        """
         self.queue_sequence: dict[BaseResourceRequest, ContentQueue] = dict()
         self._lock: ThreadLock = ThreadLock()
         self._cache: WeakValueDictionary[BaseResourceRequest, ContentQueue] = (
@@ -147,6 +234,17 @@ class BufferDispatcher:
     def make_channel(
         self, storage: BaseBufferableStorage, id: BaseResourceRequest
     ) -> ContentQueue:
+        """
+        The method creates a buffer in memory and binds it to the specified request.
+
+        Args:
+            storage (BaseBufferableStorage): an instance of the backend class to which the buffer is bound.
+            id (BaseResourceRequest): an instance of the resource request class. Used to identify the format of input and output data
+                                    and assigning a buffer to a specific request.
+
+        Returns:
+            ContentQueue: in-memory buffer instance.
+        """
         if id not in self._cache:
             io_ctx: IOContext = id.io_context
             queue = ContentQueue(storage, io_ctx.in_format, io_ctx.out_format)
@@ -161,24 +259,56 @@ class BufferDispatcher:
         return queue
 
     def get_content(self, path: str) -> AnyDataobj | None:
+        """
+        Returns the content that is stored at the given path.
+        The search is carried out among all buffers registered in the dispatcher.
+
+        Args:
+            path (str): the path string where the content is stored.
+
+        Returns:
+            AnyDataobj (optional): any data object that is captured in a buffers. If the object is not stored
+                                in the given path (for example, the queue was cleared after uploading to the
+                                backend), then None is returned.
+        """
         for dataobj in filter(
             lambda x: x.get_content(path), self.queue_sequence.values()
         ):
             return dataobj
 
     def get_buffers(self) -> list[ContentQueue]:
+        """
+        The method returns an array of registered buffers.
+
+        Returns:
+            list[ContentQueue]: an array of committed buffers.
+        """
         return list(self.queue_sequence.values())
 
+    # TODO: переименовать метод, сделать возврат кортежа кортежей
     def get_items(self) -> dict_items[BaseResourceRequest, ContentQueue]:
+        """
+        The method returns a dictionary view of the current set of registered buffers.
+
+        Returns:
+            dict_items[BaseResourceRequest, ContentQueue]: I view in the form of “request - buffer” pairs.
+        """
         return self.queue_sequence.items()
 
     def __iter__(self) -> Generator[ContentQueue, Any, None]:
+        """
+        The method wraps an array of buffers into a generator for iteration.
+        """
         yield from self.get_buffers()
 
 
 class BaseBufferableStorage(YassCore):
     """
     The base class for all other classes implementing data saving operations and interaction with the storage backend.
+    Storage classes are used as a portal to the backend itself. Anything can act as a backend - a message broker, network
+    storage, any database, if the type of downloaded data allows storage in such a backend.
+    The purpose of storage classes is to optimize I/O by buffering data, providing load control on the end storage system,
+    and recording statistics about how resources and data are used.
     """
 
     def __init__(
@@ -207,17 +337,28 @@ class BaseBufferableStorage(YassCore):
         self.active_session: bool = False
 
     @abstractmethod
-    async def launch_session(self): ...
+    async def launch_session(self) -> None:
+        """
+        The method is used to establish a session with the destination store.
+        Implementation details depend on the type of backend used.
+
+        """
 
     @property
     @abstractmethod
-    def registred_types(self) -> Iterable[str]: ...
+    def registred_types(self) -> Iterable[str]:
+        """
+        The property provides a list of all available implementations of engines of a certain backend class.
+
+        Returns:
+            Iterable (str): list of available engines.
+        """
 
     @abstractmethod
     async def merge_to_backend(self, buf: ContentQueue) -> None:
         """
-        The method activates the loading of data to the backend storage from the intermediate buffer
-        if it is available in the implementation.
+        The method transfers data directly to the backend (for storage or further distribution depending on the engine used)
+        and clears in-memory buffers if the data is buffered.
         """
         async with self._queue_lock:
             ...
@@ -232,6 +373,10 @@ class BaseBufferableStorage(YassCore):
         limit_type: Literal["none", "memory", "count", "time"] | None = None,
         limit_capacity: int | float | None = None,
     ) -> Self:
+        """
+        The method allows you to reconfigure all or individual backend parameters after creating an instance of the class.
+        Accepts the same parameters as the class itself upon initialization.
+        """
         new_params = {
             key: value
             for key, value in locals().items()
@@ -251,7 +396,8 @@ class BaseBufferableStorage(YassCore):
 
     async def _recalc_counters(self) -> None:
         """
-        The method recalculates the memory occupied in the buffer.
+        A utility method that is used to update information about the amount of
+        memory occupied by data and the number of objects in buffers.
         """
         async with self._queue_lock:
             self.mem_alloc = sum(
@@ -261,28 +407,27 @@ class BaseBufferableStorage(YassCore):
                 s.size for s in self.mem_buffer.get_buffers()
             )
 
-    async def get_content(self, path: str) -> Any:
+    async def get_content(self, path: str) -> AnyDataobj | None:
         """
-        The method returns serialized content from the buffer.
+        Returns the content that is stored at the given path.
+        The search is carried out among all buffers registered in the buffer dispatcher.
 
         Args:
-            path (str): the path to read the content.
+            path (str): the path string where the content is stored.
 
         Returns:
-            Any | Future | None: content in byte (serialized) representation or None if no such path is found.
+            AnyDataobj (optional): any data object that is captured in a buffers. If the object is not stored
+                                in the given path (for example, the queue was cleared after uploading to the
+                                backend), then None is returned.
         """
         async with self._queue_lock:
             return self.mem_buffer.get_content(path)
 
     async def get_all_content(self) -> list[AnyDataobj]:
         """
-        The method returns all the content associated with this IO context from the buffer. Existing content is deleted from the buffer.
-
-        Args:
-            ctx (_IOContext): IOContext object.
-
-        Returns:
-            ContentSet (tuple): a set of content in a deserialized form.
+        The method returns all the content (without the paths where it should be stored) that
+        is stored in buffers. During content retrieval, access to the buffer queue is blocked.
+        Buffers are not cleared in this case.
         """
         async with self._queue_lock:
             return list(
@@ -295,6 +440,15 @@ class BaseBufferableStorage(YassCore):
             )
 
     def create_buffer(self, anchor: BaseResourceRequest) -> ContentQueue:
+        """
+        The method registers a new in-memory buffer in the manager.
+
+        Args:
+            anchor (BaseResourceRequest): the object with which the buffer will be associated.
+
+        Returns:
+            ContentQueue: an instance of the in-memory buffer class.
+        """
         return self.mem_buffer.make_channel(self, anchor)
 
     async def write(self, queue_id: Any, content: Iterable) -> None:
@@ -308,6 +462,13 @@ class BaseBufferableStorage(YassCore):
         await buffer.parse_content(content)
 
     def check_limit(self) -> bool:
+        """
+        The method checks compliance with the limits set for data storage.
+        More detailed information about limits can be found in the limits.py file.
+
+        Returns:
+            bool: returns True if data storage limits have reached or exceeded the control parameter limit.
+        """
         return self.limit.is_overflowed()
 
 

@@ -32,6 +32,9 @@ def make_async(cls: type[Any]) -> type:
 SizeUnit = Literal[
     "b", "bytes", "kb", "kilobytes", "mb", "megabytes", "gb", "gigabytes"
 ]
+"""
+Available data size units.
+"""
 
 
 def scale_bytes(sz: int | float, unit: SizeUnit) -> int | float:
