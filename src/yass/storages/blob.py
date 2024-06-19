@@ -41,6 +41,7 @@ _EMPTY_FSSPEC: AsyncFileSystem = make_empty_instance(AsyncFileSystem)
 def upload(engine: _FSSpecEngine, content: bytes, path: str) -> None:
     """
     The function of uploading content to the repository.
+    Although the function is synchronous, it organizes the execution of the asynchronous storage engine in a separate thread.
 
     Args:
         engine (_FSSpecEngine): asynchronous storage engine.
@@ -53,6 +54,7 @@ def upload(engine: _FSSpecEngine, content: bytes, path: str) -> None:
 def download(engine: _FSSpecEngine, path: str) -> bytes:
     """
     The function of downloading content to the repository.
+    Although the function is synchronous, it organizes the execution of the asynchronous storage engine in a separate thread.
 
     Args:
         engine (_FSSpecEngine): asynchronous storage engine.
@@ -68,6 +70,7 @@ def download(engine: _FSSpecEngine, path: str) -> bytes:
 def read(engine: _FSSpecEngine, path: str) -> Any:
     """
     A function for reading content from storage.
+    Although the function is synchronous, it organizes the execution of the asynchronous storage engine in a separate thread.
 
     Args:
         engine (_FSSpecEngine): asynchronous storage engine.
@@ -86,6 +89,7 @@ def read(engine: _FSSpecEngine, path: str) -> Any:
 def mk_path(engine: _FSSpecEngine, path: str) -> None:
     """
     A function for creating a folder or file in the storage.
+    Although the function is synchronous, it organizes the execution of the asynchronous storage engine in a separate thread.
 
     Args:
         engine (_FSSpecEngine): asynchronous storage engine.
@@ -102,6 +106,7 @@ def check_path(
 ) -> bool:
     """
     A function to check the existence of a path to a file or folder.
+    Although the function is synchronous, it organizes the execution of the asynchronous storage engine in a separate thread.
 
     Args:
         engine (_FSSpecEngine): asynchronous storage engine.
@@ -123,18 +128,17 @@ def check_path(
 @reg_type("blob")
 class FsBlobStorage(BaseBufferableStorage):
     """
-    A class that manages the lifecycle of the content. Applies registered pipelines to the content,
-    buffers and structures it in memory. It can act as a mixin to expand the capabilities of
-    other storage manager implementations.
-    When designing your own storage manager implementations, keep in mind that the large number of
-    heavy operations performed by this version of the content manager does not allow it to be used for data streaming.
+    Implementation of a backend class for working with network and other file storages, based on the fsspec library.
+    As a consequence, in addition to explicitly defined arguments and attributes, the class also accepts argument
+    types and values ​​that are valid for a particular FS implementation (s3fs, local fs, etc.). For the class to work
+    correctly, you must use exclusively asynchronous FS implementations.
 
     Args:
-        max_alloc_mem (int|float): the size of the buffer in memory, in megabytes.
-        mem_alloc (int|float): the occupied buffer memory in megabytes.
-        queques (dict[int, dict[str, Any | Future]]): dict-like queue storage for buffered data. Queues are formed separately for each IO context.
-        Defaults to defaultdict on dict.
-        ctx_set (list[_IOContext]): a list of currently processed contexts. Defaults to empty list.
+        engine (_FSSpecEngine): the engine used to access the repository. In this case, the engine is understood as an initialized instance of the AsyncFileSystem class. Defaults to _EMPTY_FSSPEC.
+        handshake_timeout (int): timeout for establishing a connection with the backend. Defaults to 10.
+        bufferize (bool): data buffering indicator. If False, all data will be constantly merged into the backend without buffering. Defaults to True.
+        limit_type (Literal["none", "memory", "count", "time"]): type of data storage limit. Defaults to "none".
+        limit_capacity (int | float): limit value of the limiting parameter. For memory limit means the volume in megabytes. Defaults to 10.
 
     """
 

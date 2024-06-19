@@ -49,18 +49,33 @@ def get_allowed_limits() -> list[tuple[str, BaseLimit]]:
 
 @limit("time")
 class TimeLimit(BaseLimit):
+    """
+    A limit class that controls how long data remains in the buffer.
+
+    Args:
+        storage (BaseBufferableStorage): a storage facility whose status is monitored.
+        capacity (int): time in seconds.
+    """
+
     def __init__(self, storage: BaseBufferableStorage, capacity: int):
         self.storage: BaseBufferableStorage = storage
         self.capacity = timedelta(seconds=capacity)
 
-    def is_overflowed(self):
-        current_timestamp = datetime.now()
+    def is_overflowed(self) -> bool:
+        current_timestamp: datetime = datetime.now()
         return self.capacity < (current_timestamp - self.storage.last_commit)
 
 
 @limit("memory")
 class MemoryLimit(BaseLimit):
     def __init__(self, storage: BaseBufferableStorage, capacity: int | float):
+        """
+        A limit class that controls the amount of memory occupied by buffers.
+
+        Args:
+            storage (BaseBufferableStorage): a storage facility whose status is monitored.
+            capacity (int | float): memory threshold in megabytes.
+        """
         self.storage: BaseBufferableStorage = storage
         self.capacity: int | float = capacity
 
@@ -74,8 +89,15 @@ class MemoryLimit(BaseLimit):
 @limit("count")
 class CountLimit(BaseLimit):
     def __init__(self, storage: BaseBufferableStorage, capacity: int):
-        self.storage = storage
-        self.capacity = capacity
+        """
+        A limit class that controls the number of objects in buffers.
+
+        Args:
+            storage (BaseBufferableStorage): a storage facility whose status is monitored.
+            capacity (int): the limit on the number of objects in the buffer.
+        """
+        self.storage: BaseBufferableStorage = storage
+        self.capacity: int = capacity
         # TODO: нужно реализовать служебный метод для подсчета количества элементов в сторадже
 
     def is_overflowed(self) -> bool:
@@ -84,5 +106,12 @@ class CountLimit(BaseLimit):
 
 @limit("unable")
 class UnableBufferize(BaseLimit):
+    """
+    Special plug. Essentially disables data buffering, forcing the storage class
+    to continuously write data to the backend. Its use can negatively impact
+    performance as it significantly increases the amount of I/O and more often
+    blocks memory buffers until the data is uploaded to the backend.
+    """
+
     def is_overflowed(self) -> bool:
         return True

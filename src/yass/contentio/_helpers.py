@@ -22,7 +22,20 @@ __all__: list[str] = [
 ]
 
 
-def _update_sign(func: Callable, extra_kwargs: dict) -> Callable:
+def _update_sign(func: Callable, extra_kwargs: dict[str, Any]) -> Callable:
+    """
+    Updates the default values ​​in the parameters of a given function.
+    Value binding occurs by argument name, regardless of whether
+    positional arguments or keyword are updated.
+    Acts like partial, but allows specific updates of arguments.
+
+    Args:
+        func (Callable): Target function.
+        extra_kwargs (dict[str, Any]): A dict of arguments and values ​​that need to be associated with the function.
+
+    Returns:
+        Callable: Function with updated default arguments.
+    """
     if not extra_kwargs:
         return func
     sig: Signature = signature(func)
@@ -54,14 +67,29 @@ def _update_sign(func: Callable, extra_kwargs: dict) -> Callable:
 
 
 def _resolve_annotation(
-    annotated: Any, module_name: str
+    annot: Any, annot_owner: Any
 ) -> tuple[type, ...] | NoReturn:
+    """
+    Converts the string representation of an annotation to a class.
+    Ignores None annotation.
+
+    Args:
+        annot (Any): The annotation to be converted.
+        annot_owner (Any): The object to which the annotation directly belongs. Can be any object containing an annotation.
+
+    Raises:
+        NameError: Annotation conversion module not found. The error message indicates the module you are looking for.
+
+    Returns:
+        tuple[type, ...] | NoReturn: a tuple with classes corresponding to the annotation (except None).
+    """
+    module_name = str(annot_owner.__module__)
     cnt_split = module_name.count(".")
-    if isinstance(annotated, str):
+    if isinstance(annot, str):
         not_resolved = []
         search_area = module_name
         cnt_split = module_name.count(".")
-        annotations = annotated.split("|")
+        annotations = annot.split("|")
         result = []
         for annot in annotations:
             loop_cnt = 0
@@ -95,7 +123,7 @@ def _resolve_annotation(
         return tuple(result)
     else:
         return tuple(
-            t for t in [*get_args(annotated), get_origin(annotated)] if bool(t)
+            t for t in [*get_args(annot), get_origin(annot)] if bool(t)
         )
 
 
@@ -109,6 +137,17 @@ _f: Callable[[type, Any, Parameter], bool] = (
 def _handle_generic(
     param: Parameter, annotation: Any, target_type: type
 ) -> bool:
+    """
+    Checking whether the target type is included in the list using a function argument.
+
+    Args:
+        param (Parameter): A parameter object that represents the target type.
+        annotation (Any): A tuple of annotations represented by classes.
+        target_type (type): The type to be checked to see if it is included in the arguments.
+
+    Returns:
+        bool: Boolean result of the test performed.
+    """
     if annotation is None or not annotation:
         return False
     status: bool = _f(target_type, annotation, param)
@@ -116,6 +155,16 @@ def _handle_generic(
 
 
 def _check_input_sig(func: Callable) -> bool:
+    """
+    Validates the signature of the function used to deserialize data.
+    Such a function must take a bytes object as its first parameter.
+
+    Args:
+        func (Callable): Function for deserializing data.
+
+    Returns:
+        bool: Boolean result of the test performed.
+    """
     overloads: Sequence[Callable] = get_overloads(func) or [func]
     for overload_sign in overloads:
         sig: Signature = signature(overload_sign)
@@ -123,14 +172,24 @@ def _check_input_sig(func: Callable) -> bool:
         try:
             annot = get_type_hints(overload_sign)[param.name]
         except Exception:
-            module_name = str(func.__module__)
-            annot = _resolve_annotation(param.annotation, module_name)
+            annot: tuple[type, ...] = _resolve_annotation(
+                param.annotation, func
+            )
         if status := _handle_generic(param, annot, bytes):
             return status
     return False
 
 
 def _check_output_sig(func: Callable) -> bool:
+    """
+    Validates a function for data serialization. Such a function must take a byte buffer object (BytesIO) as its second argument.
+
+    Args:
+        func (Callable): Function for serializing data.
+
+    Returns:
+        bool: Boolean result of the test performed.
+    """
     overloads: Sequence[Callable] = get_overloads(func) or [func]
     for overload_sign in overloads:
         sig: Signature = signature(overload_sign)

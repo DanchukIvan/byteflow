@@ -8,10 +8,10 @@ from collections.abc import Callable
 
 from yass.core import SingletonMixin
 
-__all__ = ["INPUT_MAP", "IOContextMap", "InputMap", "OUTPUT_MAP", "OutputMap"]
+__all__ = ["INPUT_MAP", "OUTPUT_MAP"]
 
 
-class InputMap(SingletonMixin, dict[str, Callable]):
+class _InputMap(SingletonMixin, dict[str, Callable]):
     """
     Dict-like repository of data input (deserialization) functions.
     The key is the name of the data type in the form of a string, the value is callable,
@@ -19,7 +19,7 @@ class InputMap(SingletonMixin, dict[str, Callable]):
     """
 
 
-class OutputMap(SingletonMixin, dict[str, Callable]):
+class _OutputMap(SingletonMixin, dict[str, Callable]):
     """
     Dict-like repository of data output (serialization) functions.
     The key is the name of the data type in the form of a string, the value is callable,
@@ -27,7 +27,7 @@ class OutputMap(SingletonMixin, dict[str, Callable]):
     """
 
 
-class IOContextMap(SingletonMixin, defaultdict):
+class _IOContextMap(SingletonMixin, defaultdict):
     """
     Dict-like repository of registered IO contexts. Any object can be used as a key (usually an instance of the resource request class).
     This key is also referred to as the binding key. The IO contexts associated with this key are stored in a list that is
@@ -35,6 +35,5 @@ class IOContextMap(SingletonMixin, defaultdict):
     """
 
 
-INPUT_MAP = InputMap()
-OUTPUT_MAP = OutputMap()
-_IOCONTEXT_MAP = IOContextMap(list)
+INPUT_MAP = _InputMap()
+OUTPUT_MAP = _OutputMap()
