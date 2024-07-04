@@ -1,11 +1,102 @@
-site_name: YASS - Yet Another Simple Scraper
+site_name: Yass - Yet Another Simple Scraper
+site_description: Simple and powerful data scraper
+strict: true
+
+repo_name: yass
+repo_url: https://github.com/DanchukIvan/yass
+edit_uri: ""
 
 theme:
   name: "material"
+  font:
+    text: Roboto
+  icon:
+    annotation: material/plus-circle
+  features:
+    - content.tabs.link
+    - content.code.annotate
+    - content.code.copy
+    - announce.dismiss
+    - navigation.instant
+    - navigation.indexes
+    - navigation.instant.prefetch
+    - navigation.instant.progress
+    - navigation.path
+    - navigation.top
+    - navigation.tracking
+    - search.suggest
+    - toc.follow
 
 plugins:
   - search
+  - autorefs
   - mkdocstrings:
-    default_handler: python
-  - typeset
-  - autorefs: {}
+      default_handler: python
+      handlers:
+        python:
+          options:
+            show_root_toc_entry: false
+            show_symbol_type_heading: true
+            show_labels: false
+            show_docstring_modules: true
+            merge_init_into_class: true
+            show_signature_annotations: true
+extra:
+  generator: true
+  version:
+    provider: mike
+
+markdown_extensions:
+  - attr_list
+  - md_in_html
+  - markdown_version_annotations
+  - admonition
+  - pymdownx.superfences
+  - pymdownx.extra
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - footnotes
+  - toc:
+      permalink: true
+      title: Page contents
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+nav:
+  - Welcome to Yass: index.md
+  - Understanding Yass:
+      - Main components: about\concepts.md
+      - Tutorial:
+          - Let's get started: about\tutorial\step_1.md
+          - I/O Configuration: about\tutorial\step_2.md
+          - Run it: about\tutorial\step_3.md
+  - API documentation:
+      - About the API section: api\about_section.md
+      - Entrypoint: api\yass.md
+      - Working with content:
+          - ContentIO: api\contentio.md
+          - Common: api\common.md
+          - Utilities: api\helpers.md
+      - Data collectors:
+          - Base: api\base_data_collectors.md
+          - Implementations:
+              - API data collector: api\api_data_collectors.md
+      - Resources:
+          - Base: api\base_resources.md
+          - Implementations:
+              - API resources: api\api_resources.md
+      - Scheduling:
+          - Base: api\base_scheduling.md
+          - Implementations: api\scheduling.md
+      - Storages backends:
+          - Base: api\base_storages.md
+          - Implementations: api\blob_storage.md
+      - Miscellaneous utilities: api\misc_utils.md
