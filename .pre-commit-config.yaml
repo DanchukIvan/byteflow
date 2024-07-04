@@ -61,7 +61,7 @@ repos:
       - id: pdm-lock-check
       - id: pdm-sync
       - id: pdm-export
-        args: ["-o", "requirements.txt", "--without-hashes"]
+        args: ["-o", "requirements.txt", "--without-hashes", "--pyproject"]
         files: ^pdm.lock$
   - repo: https://github.com/jorisroovers/gitlint
     rev: v0.19.1
