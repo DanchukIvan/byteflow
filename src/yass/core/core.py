@@ -1,28 +1,18 @@
 from collections import defaultdict
 from collections.abc import Callable
-from inspect import isabstract
+from inspect import isabstract, isclass
 from itertools import chain
 from types import MappingProxyType
-from typing import (
-    Any,
-    Generic,
-    Protocol,
-    TypeGuard,
-    TypeVar,
-    cast,
-    runtime_checkable,
-)
-
-from beartype import beartype
+from typing import Any, Protocol, TypeVar, runtime_checkable
 
 __all__ = [
     "AYC",
     "SingletonMixin",
     "YassCore",
     "get_all_factories",
-    "is_empty_instance",
-    "make_empty_instance",
     "reg_type",
+    "YassUndefined",
+    "Undefined",
 ]
 
 
@@ -87,7 +77,6 @@ _FACTORY_REPO = _FactoryRepo(dict)
 _FACTORY_REPO_TYPE = MappingProxyType[type[_AC], dict[str, type[_AC]]]
 
 
-@beartype
 def reg_type(name: str) -> Callable[[type[_AC]], type[_AC]]:
     """
     A utility function that registers a class in the repository. The function analyzes the MRO of the class,
@@ -127,7 +116,6 @@ def reg_type(name: str) -> Callable[[type[_AC]], type[_AC]]:
     return wrapped_subcls
 
 
-@beartype
 def _get_factory(id: object | type) -> MappingProxyType[str, type[_AC]]:
     """
     Returns a factory, defining the required "branch" of implementations for the object class.
@@ -141,12 +129,22 @@ def _get_factory(id: object | type) -> MappingProxyType[str, type[_AC]]:
     Returns:
         MappingProxyType[str, type[_AC]]: child class factory proxy.
     """
-    if isinstance(id, object):
-        id = id.__class__
-    for key in filter(lambda x: issubclass(id, x), _FACTORY_REPO.keys()):
-        return MappingProxyType(_FACTORY_REPO[key])
-    msg = "Ни один класс не зарегистрирован под данным идентификатором."
-    raise AttributeError(msg)
+    if not isclass(id):
+        base_lst: list[type] = list(id.__class__.__mro__)[::-1]
+        id = [
+            cls
+            for cls in filter(
+                lambda x: issubclass(x, YassCore)
+                and issubclass(id.__class__, x),
+                base_lst,
+            )
+        ][0]
+    try:
+        repo: _FACTORY_REPO_TYPE = get_all_factories()
+        return MappingProxyType(repo[id])
+    except KeyError:
+        msg = "Ни один класс не зарегистрирован под данным идентификатором."
+        raise AttributeError(msg)
 
 
 def get_all_factories() -> _FACTORY_REPO_TYPE:
@@ -159,58 +157,33 @@ def get_all_factories() -> _FACTORY_REPO_TYPE:
 
 _MC = TypeVar("_MC")
 
+YassUndefined = object()
+Undefined = Any
 
-class _EmptyClass(Generic[_MC]):
-    """
-    A special class that is used as a stub in cases where the use of None is unacceptable or significantly
-    complicates the description of types. In fact, it is a proxy for any class. In operations with "if" it
-    always returns False. When trying to access attributes it always returns an error.
+# @beartype
+# def make_empty_instance(cls: type) -> _MC:
+#     """
+#     The conventional way to create instances of empty classes.
 
-    Raises:
-        AttributeError: thrown when attempting to access an attribute of a proxied class.
-    """
+#     Args:
+#         cls (type[_MC]): any class for which you need to create a proxy.
 
-    def __new__(cls, proxy: type[_MC]) -> _MC:
-        instance = super().__new__(cls)
-        new_cls: _MC = cast(proxy, instance)
-        return new_cls
-
-    def __init__(self, proxy: type[_MC]):
-        self._empty = True
-
-    def __bool__(self):
-        return False
-
-    def __getattribute__(self, __name: str) -> Any:
-        if __name != "_empty":
-            msg = "Пустой класс является заглушкой и не имеет аттрибутов или методов."
-            raise RuntimeError(msg) from None
+#     Returns:
+#         _MC: a proxy instance that undergoes static type checking.
+#     """
+#     return EMPTY_INSTANCE
 
 
-@beartype
-def make_empty_instance(cls: type[_MC]) -> _MC:
-    """
-    The conventional way to create instances of empty classes.
+# @beartype
+# def is_empty_instance(instance: _MC | type[_MC]) -> TypeGuard[_EmptyClass]:
+#     """
+#     Helper function to check that the provided instance is an empty class.
+#     Can be used to improve the unambiguity of certain operations in the code.
 
-    Args:
-        cls (type[_MC]): any class for which you need to create a proxy.
+#     Args:
+#         instance (_MC | type[_MC]): instance of any class or any class.
 
-    Returns:
-        _MC: a proxy instance that undergoes static type checking.
-    """
-    return _EmptyClass(cls)
-
-
-@beartype
-def is_empty_instance(instance: _MC | type[_MC]) -> TypeGuard[_EmptyClass]:
-    """
-    Helper function to check that the provided instance is an empty class.
-    Can be used to improve the unambiguity of certain operations in the code.
-
-    Args:
-        instance (_MC | type[_MC]): instance of any class or any class.
-
-    Returns:
-        TypeGuard[_EmptyClass]: If the class instance is "empty", it will return True.
-    """
-    return hasattr(instance, "_empty")
+#     Returns:
+#         TypeGuard[_EmptyClass]: If the class instance is "empty", it will return True.
+#     """
+#     return hasattr(instance, "_empty")
