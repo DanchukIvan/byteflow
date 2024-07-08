@@ -1,10 +1,5 @@
-"""
-The module contains only the base class of the storage manager, from which all other implementations should inherit.
-"""
-
 from __future__ import annotations
 
-from _collections_abc import dict_items
 from abc import abstractmethod
 from asyncio import Lock, create_task
 from collections.abc import (
@@ -18,13 +13,13 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from itertools import chain
 from threading import Lock as ThreadLock
-from typing import TYPE_CHECKING, Any, Literal, Protocol, Self, TypeAlias
+from typing import TYPE_CHECKING, Any, Literal, Protocol, Self
 from weakref import WeakValueDictionary
 
 from rich.pretty import pprint as rpp
 
 from yass.contentio import serialize
-from yass.core import YassCore, make_empty_instance
+from yass.core import Undefined, YassCore, YassUndefined
 from yass.scheduling import UnableBufferize, setup_limit
 from yass.utils import scale_bytes
 
@@ -36,7 +31,6 @@ __all__ = [
     "Mb",
     "engine_factory",
     "supported_engine_factories",
-    "AnyDataobj",
 ]
 
 if TYPE_CHECKING:
@@ -48,13 +42,15 @@ if TYPE_CHECKING:
 class _SupportAsync(Awaitable, Protocol): ...
 
 
-_EMPTY_ASYNC_ENGINE = make_empty_instance(_SupportAsync)
 _ENGINE_FACTORIES: dict[tuple[type, ...], Callable[..., _SupportAsync]] = (
     dict()
 )
 
 Mb = int | float
-AnyDataobj: TypeAlias = Any
+AnyDataobj = Any
+"""
+Alias for Any. Indicates that the object accepts any valid data object.
+"""
 
 
 def engine_factory(*_cls: type):
@@ -91,6 +87,9 @@ def _get_engine_factory(key: type):
 
 
 def supported_engine_factories():
+    """
+    The function returns the currently available engine factories.
+    """
     return _ENGINE_FACTORIES
 
 
@@ -286,14 +285,16 @@ class BufferDispatcher:
         return list(self.queue_sequence.values())
 
     # TODO: переименовать метод, сделать возврат кортежа кортежей
-    def get_items(self) -> dict_items[BaseResourceRequest, ContentQueue]:
+    def get_items(
+        self,
+    ) -> tuple[tuple[BaseResourceRequest, ContentQueue], ...]:
         """
         The method returns a dictionary view of the current set of registered buffers.
 
         Returns:
             dict_items[BaseResourceRequest, ContentQueue]: I view in the form of “request - buffer” pairs.
         """
-        return self.queue_sequence.items()
+        return tuple(self.queue_sequence.items())
 
     def __iter__(self) -> Generator[ContentQueue, Any, None]:
         """
@@ -313,7 +314,7 @@ class BaseBufferableStorage(YassCore):
 
     def __init__(
         self,
-        engine: Any = _EMPTY_ASYNC_ENGINE,
+        engine: Undefined | Any = YassUndefined,
         *,
         handshake_timeout: int = 10,
         bufferize: bool = False,

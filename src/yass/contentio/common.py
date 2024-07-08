@@ -36,4 +36,15 @@ class _IOContextMap(SingletonMixin, defaultdict):
 
 
 INPUT_MAP = _InputMap()
+"""
+Dict-like repository of data input (deserialization) functions.
+The key is the name of the data type in the form of a string, the value is callable,
+assigned as a handler for the corresponding data type.
+"""
+
 OUTPUT_MAP = _OutputMap()
+"""
+Dict-like repository of data output (serialization) functions.
+The key is the name of the data type in the form of a string, the value is callable,
+assigned as a handler for the corresponding data type.
+"""

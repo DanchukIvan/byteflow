@@ -12,6 +12,16 @@ _P = ParamSpec("_P")
 
 
 def to_async(func: Callable[_P, _T]) -> Callable[..., Awaitable[_T]]:
+    """
+    Allows a blocking function to be executed asynchronously by wrapping it in a call to to_thread of the asyncio library.
+
+    Args:
+        func (Callable[_P, _T]): function with a blocking call.
+
+    Returns:
+        Callable: a function that returns a awaitable object.
+    """
+
     @wraps(func)
     def wrapped(*args: _P.args, **kwargs: _P.kwargs) -> Awaitable[_T]:
         return to_thread(func, *args, **kwargs)
@@ -20,6 +30,15 @@ def to_async(func: Callable[_P, _T]) -> Callable[..., Awaitable[_T]]:
 
 
 def make_async(cls: type[Any]) -> type:
+    """
+    The decorator converts all class methods to an asynchronous version using another decorating function, to_async.
+
+    Args:
+        cls (type[Any]): the class whose methods need to be patched.
+
+    Returns:
+        type: a class with methods converted to an asynchronous version.
+    """
     members: list[tuple[str, Callable]] = inspect.getmembers(cls, isfunction)
     for name, meth in members:
         if not name.startswith("__"):

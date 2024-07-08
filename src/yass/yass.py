@@ -14,7 +14,7 @@ from yass.resources.base import BaseResource
 from yass.storages.base import BaseBufferableStorage
 
 if TYPE_CHECKING:
-    from asyncio import AbstractEventLoop, Task
+    from asyncio import Task
 
     from yass.storages import FsBlobStorage
 
@@ -46,6 +46,7 @@ class EntryPoint:
     ) -> ApiResource:
         """
         The method allows you to create and register resources. At the moment, only the resource API implementation is available.
+
         Args:
             resource_type (Literal[&quot;api&quot;]): resource type. At the moment, only the API resource is available.
             url (str): As a rule, this is a full-fledged link without dynamic parts of the URL address.
@@ -83,7 +84,8 @@ class EntryPoint:
         In the same method, errors are intercepted if the asyncio task fails with an error.
         """
         awaiting_tasks: list[Task] | set[Task] = [
-            create_task(dc.start()) for dc in self._prepare_collectors()
+            create_task(dc.start(), name=dc._name)
+            for dc in self._prepare_collectors()
         ]
         while awaiting_tasks:
             done, pending = await wait(
@@ -101,7 +103,6 @@ class EntryPoint:
                         f"Condition {task.get_coro()} finished execution with an error {task.exception()}"
                     )
                     task.cancel()
-                    await task
 
     def run(self, *, debug: bool = False) -> None:
         """
@@ -114,6 +115,7 @@ class EntryPoint:
         self.debug_mode = debug
         threaded_loop = Thread(target=self._run_async)
         threaded_loop.start()
+        threaded_loop.join()
 
     def _run_async(self) -> None:
         """
@@ -122,7 +124,7 @@ class EntryPoint:
         self._resolve_el_policy()
         asyncio.run(self._collect_data(), debug=self.debug_mode)
 
-    def _resolve_el_policy(self) -> AbstractEventLoop:
+    def _resolve_el_policy(self) -> None:
         """
         The method tries to set the faster uvloop as the main event loop type. If this fails, the default event loop remains.
 

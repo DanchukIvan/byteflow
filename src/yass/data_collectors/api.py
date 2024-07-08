@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from asyncio import Task, create_task, gather, sleep
+from asyncio import Task, TimeoutError, create_task, gather, sleep
 from collections.abc import AsyncGenerator, Awaitable, Coroutine, Sequence
 from itertools import compress, filterfalse
 from time import time
@@ -13,7 +13,7 @@ from aioitertools.more_itertools import take
 from rich.pretty import pprint as rpp
 
 from yass.contentio import deserialize
-from yass.core import is_empty_instance, reg_type
+from yass.core import YassUndefined, reg_type
 from yass.data_collectors.base import BaseDataCollector
 
 __all__ = ["ApiDataCollector", "EORTriggersResolver"]
@@ -25,8 +25,6 @@ if TYPE_CHECKING:
         ApiResource,
         BatchCounter,
     )
-
-__all__: list[str] = ["ApiDataCollector"]
 
 
 class EORTriggersResolver:
@@ -106,13 +104,30 @@ class ApiDataCollector(BaseDataCollector):
     also parses the resource for additional headers for requests, restrictions on the number
     of requests, and records triggers set for the resource.
 
-    Args:
-        query (ApiRequest): an instance of the request to the resource for which the data collector is being created.
-        resource (ApiResource): a resource from which additional information is retrieved to initialize the data collector.
-
+    Attributes:
+        delay (int | float): delay before sending requests.
+        timeout (int | float): waiting time for a response from the data source.
+        collect_trigger (ActionCondition): a trigger, the firing of which allows you to begin processing the data source.
+        eor_status (bool): the status of no payload in the data source.
+        _write_channel (ContentQueue): a buffer in memory in which data is stored before uploading to the backend.
+        url_series (AsyncGenerator): a link generator created by a Request instance.
+        pipeline (IOBoundPipeline): an instance of the pipeline class associated with a request that is processed by the data collector.
+        input_format (str): format of incoming data.
+        output_format (str): the format in which the data should be saved.
+        path_producer (PathTemplate): data path generator.
+        client_factory (ClientSession): session object factory. The aiohttp library class is used.
+        batcher (BatchCounter): atomic request limit counter per second.
+        headers (dict): additional request headers, including authorization headers.
+        eor_checker (EORTriggersResolver): an instance of the EOR resolver class. Used to check for the presence of a payload in the query results.
+        current_bs (int): the allowed number of simultaneous requests to the data source.
     """
 
     def __init__(self, query: ApiRequest, resource: ApiResource):
+        """
+        Args:
+            query (ApiRequest): an instance of the request to the resource for which the data collector is being created.
+            resource (ApiResource): a resource from which additional information is retrieved to initialize the data collector.
+        """
         super().__init__(resource, query)
         self.client_factory = ClientSession
         self.batcher: BatchCounter = resource.batch
@@ -137,10 +152,11 @@ class ApiDataCollector(BaseDataCollector):
             f"Текущий размер батча {self.current_bs}. Минимальный размер батча {self.batcher.min_batch}."
         )
         url_gen: AsyncGenerator[str, None] = self.url_series()
-        print(f"Статус генератора ссылок (ag_running): {url_gen.ag_running}.")
         while True:
             urls: list[str] = await take(self.current_bs, url_gen)
             rpp(f"Количество полученных ссылок {len(urls)}")
+            print("Urls для обработки")
+            print(urls)
             start = int(time())
             raw_content: list[bytes] = await self.process_requests(urls)
             if len(raw_content) > 0:
@@ -150,39 +166,39 @@ class ApiDataCollector(BaseDataCollector):
                         for raw_bytes in raw_content
                     ]
                 )
-            if not is_empty_instance(self.pipeline):
-                async with self.pipeline.run_transform(
-                    deser_content
-                ) as pipeline:
-                    deser_content = await pipeline
-            if deser_content:
-                prepared_content = tuple(
-                    (
-                        self.path_producer.render_path(self.output_format),
-                        dataset,
+                if self.pipeline is not YassUndefined:
+                    async with self.pipeline.run_transform(
+                        deser_content
+                    ) as pipeline:
+                        deser_content = await pipeline
+                if deser_content:
+                    prepared_content = tuple(
+                        (
+                            self.path_producer.render_path(self.output_format),
+                            dataset,
+                        )
+                        for dataset in deser_content
                     )
-                    for dataset in deser_content
-                )
-            async with self._write_channel.block_state() as buf:
-                await buf.parse_content(prepared_content)
-            rpp(f"Ресурс закончился? {self.eor_status}")
-            if self.eor_status:
-                try:
-                    await url_gen.asend(self.eor_status)  # type:ignore
-                except StopAsyncIteration:
-                    rpp("Обход ресурса завершен.")
-                    break
-                self.eor_status = False
+                async with self._write_channel.block_state() as buf:
+                    await buf.parse_content(prepared_content)
             rpp(f"Новый размер батча составил {self.current_bs}")
             end = int(time())
             print(f"Время обработки запросов составило {end - start} секунд")
             effect_delay: int | float = self.delay - (end - start)
             rpp(f"Эффективная задержка составила {effect_delay} секунд.")
+            rpp(f"Ресурс закончился? {self.eor_status}")
             if effect_delay > 0:
                 await sleep(effect_delay)
+            if self.eor_status:
+                try:
+                    await url_gen.asend(self.eor_status)  # type:ignore
+                except StopAsyncIteration:
+                    rpp("Обход ресурса завершен.")
+                    self.eor_status = False
+                    break
         self.batcher.release_batch(self.current_bs)
         coro = self.start()
-        return create_task(coro)
+        return create_task(coro, name=self._name)
 
     async def process_requests(self, urls: list[str]) -> list[bytes]:
         """
@@ -199,30 +215,41 @@ class ApiDataCollector(BaseDataCollector):
         Returns:
             list (bytes): batch of content in byte representation.
         """
-        session: ClientSession
-        async with self.client_factory(
-            timeout=aiohttp.ClientTimeout(self.timeout),
-            headers=self.headers,
-            json_serialize=orjson.dumps,  # type:ignore
-        ) as session:
-            tasks: list[Coroutine[Awaitable[Any], None, ClientResponse]] = [
-                session.get(url)
-                for url in urls  # type: ignore
-            ]
-            self.current_bs = self.batcher.recalc_limit(self.current_bs)
-            responses: list[ClientResponse] = await gather(*tasks)
-        error_resp: ClientResponse
-        # FIXME: А это норма ваще?
-        for error_resp in filterfalse(
-            lambda x: x.status in list(range(200, 299, 1)), responses
-        ):
-            msg: str = (await error_resp.content.read()).decode()
-            raise RuntimeError(error_resp.url, error_resp.headers, msg)
+        if len(urls) > 0:
+            session: ClientSession
+            async with self.client_factory(
+                timeout=aiohttp.ClientTimeout(self.timeout),
+                headers=self.headers,
+                json_serialize=orjson.dumps,  # type:ignore
+            ) as session:
+                tasks: list[
+                    Coroutine[Awaitable[Any], None, ClientResponse]
+                ] = [
+                    session.get(url)
+                    for url in urls  # type: ignore
+                ]
+                self.current_bs = self.batcher.recalc_limit(self.current_bs)
+                responses: list[ClientResponse | BaseException] = await gather(
+                    *tasks, return_exceptions=True
+                )
+            error_resp: ClientResponse | BaseException
+            # FIXME: А это норма ваще?
+            responses_only: list[ClientResponse] = [
+                r for r in responses if not isinstance(r, TimeoutError)
+            ]  # type: ignore
+            for error_resp in filterfalse(
+                lambda x: x.status in list(range(200, 299, 1)), responses_only
+            ):
+                msg: str = (await error_resp.content.read()).decode()
+                raise RuntimeError(error_resp.url, error_resp.headers, msg)
+        else:
+            self.eor_status = True
+            return []
         contents: list[bytes] = await gather(
-            *[resp.content.read() for resp in responses]
+            *[resp.content.read() for resp in responses_only]
         )
         eor_check: list[bool] = self.eor_checker.eor_signal(
-            contents, responses
+            contents, responses_only
         )
         contents = list(compress(contents, eor_check))
         self.eor_status: bool = not all(eor_check)

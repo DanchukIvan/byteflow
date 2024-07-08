@@ -1,7 +1,3 @@
-"""
-This module provides functions and classes responsible for input/output and serialization/deserialization of content.
-"""
-
 from __future__ import annotations
 
 import os
@@ -15,14 +11,14 @@ from io import BytesIO
 from itertools import chain
 from pprint import pprint
 from sys import platform
-from typing import IO, TYPE_CHECKING, Any, Self, TypeAlias, cast
+from typing import IO, TYPE_CHECKING, Any, Self, cast
 
 if TYPE_CHECKING:
     from yass.storages import BaseBufferableStorage
 
-from yass.contentio._helpers import *
 from yass.contentio.common import *
-from yass.core import make_empty_instance
+from yass.contentio.helpers import *
+from yass.core import Undefined, YassUndefined
 
 __all__ = [
     "IOBoundPipeline",
@@ -37,6 +33,10 @@ __all__ = [
     "reg_output",
     "serialize",
 ]
+
+"""
+This module provides functions and classes responsible for input/output and serialization/deserialization of content.
+"""
 
 
 def reg_input(
@@ -53,8 +53,8 @@ def reg_input(
     Raises:
         RuntimeError: thrown if the function fails validation. The error message indicates which part of the function is invalid.
     """
-    if _check_input_sig(func):
-        func = _update_sign(func, extra_args) if extra_args else func
+    if check_input_sig(func):
+        func = update_sign(func, extra_args) if extra_args else func
     else:
         raise RuntimeError(
             "Первым аргументом функции ввода должен быть объект типа bytes"
@@ -76,8 +76,8 @@ def reg_output(
     Raises:
         RuntimeError: Thrown if the function fails validation. The error message indicates which part of the function is invalid.
     """
-    if _check_output_sig(func):
-        func = _update_sign(func, extra_args) if extra_args else func
+    if check_output_sig(func):
+        func = update_sign(func, extra_args) if extra_args else func
     else:
         raise RuntimeError(
             "Вторым аргументом функции вывода должен быть объект типа BytesIO или совместимый с ним байтовый контейнер"
@@ -164,7 +164,7 @@ def create_datatype(
         raise RuntimeError(msg)
 
 
-_DataTypeInfo: TypeAlias = dict[str, dict[str, Any]]
+_DataTypeInfo = dict[str, dict[str, Any]]
 
 
 def allowed_datatypes(*, display: bool = False) -> list[_DataTypeInfo]:
@@ -213,7 +213,7 @@ def _datatype_info(datatype: str) -> _DataTypeInfo:
         raise KeyError(msg)
 
 
-@dataclass(slots=True)
+@dataclass
 class PathSegment:
     """
     Is a representation of the path fragment where the retrieved data is stored.
@@ -224,6 +224,12 @@ class PathSegment:
         segment_order (int): The position that the segment will occupy along the path.
         segment_parts (list[str | Callable]): parts of the segment. There can be both callables that will be called to format a string
                                                 (for example, functions from the datetime package), and standard strings. Defaults to [].
+
+    Attributes:
+        concatenator (str): literal through which parts of the segment will be combined.
+        segment_order (int): The position that the segment will occupy along the path.
+        segment_parts (list[str | Callable]): parts of the segment. There can be both callables that will be called to format a string
+                                                (for example, functions from the datetime package), and standard strings.
     """
 
     concatenator: str
@@ -266,15 +272,17 @@ class PathTemplate:
     When generating the final path string, it takes into account the environment for which the path is being generated.
     The generated paths are the address where the data is stored in the storage.
 
-    Args:
-        segments (list[PathSegment], optional): list of path segments. Defaults to [].
-        is_local (bool, optional): if set to True, then PathTemplate will form the path using the operating system path separator. Defaults to False.
+    Attributes:
+        segments (list[PathSegment], optional): list of path segments.
+        is_local (bool, optional): if set to True, then PathTemplate will form the path using the operating system path separator.
     """
 
-    def __init__(
-        self, segments: list[PathSegment] = [], is_local: bool = False
-    ) -> None:
-        self.segments: list[PathSegment] = segments
+    def __init__(self, is_local: bool = False) -> None:
+        """
+        Args:
+            is_local (bool, optional): if set to True, then PathTemplate will form the path using the operating system path separator. Defaults to False.
+        """
+        self.segments: list[PathSegment] = list()
         self.is_local: bool = is_local
 
     def add_segment(
@@ -328,6 +336,14 @@ class IOBoundPipeline:
     and the current load on the resource. Each pipeline is inextricably linked to an I/O context, and
     for any such context there can only be one pipeline.
 
+    Attributes:
+        io_context (IOContext): an I/O context object to which the pipeline will be associated.
+        functions (list[Callable]): list of registered functions. The order of the functions in the list directly indicates the order in which they are tried on.
+        on_error (Callable): Exception catching function. Can be used for specific exception handling. By default, it is a lambda function that returns
+                            any object passed to it unchanged.
+        data_filter (Callable): A function for filtering content for invalid blocks. Registered via the appropriate method. By default, it is a lambda function
+                            that returns any object passed to it unchanged.
+
     Args:
         io_context (IOContext): an I/O context object to which the pipeline will be associated.
         functions (list[Callable]): list of registered functions. The order of the functions in the list directly indicates the order in which they are tried on.
@@ -359,7 +375,7 @@ class IOBoundPipeline:
 
         def wrapper(func):
             self._check_sig(func)
-            updated_func: Callable = _update_sign(
+            updated_func: Callable = update_sign(
                 func, extra_kwargs=extra_kwargs
             )
             self.functions.insert(order - 1, updated_func)
@@ -422,17 +438,17 @@ class IOBoundPipeline:
         ctx: IOContext = self.io_context
         return_annot: type = signature(func).return_annotation
         if isinstance(return_annot, str):
-            return_annot = _resolve_annotation(return_annot, func)[0]
+            return_annot = resolve_annotation(return_annot, func)[0]
         func_args_annot: list[type] = list(
             chain(
                 *[
-                    _resolve_annotation(param.annotation, str(func.__module__))
+                    resolve_annotation(param.annotation, str(func.__module__))
                     for param in signature(func).parameters.values()
                 ]
             )
         )
         input_func = INPUT_MAP[ctx.in_format]
-        return_input_annot = _resolve_annotation(
+        return_input_annot = resolve_annotation(
             signature(input_func).return_annotation, str(input_func.__module__)
         )
         valid_annot: list[type] = [
@@ -458,7 +474,7 @@ class IOBoundPipeline:
         func: Callable = self.functions.pop(old_idx)
         self.functions.insert(new_idx, func)
 
-    def show_pipline(self) -> str:
+    def show_pipeline(self) -> str:
         """
         The method returns a string describing the chain of function calls in the pipeline.
 
@@ -473,10 +489,6 @@ class IOBoundPipeline:
         return " -> ".join(pipe) + f" for {ctx.in_format}."
 
 
-_EMPTY_PIPELINE: IOBoundPipeline = make_empty_instance(IOBoundPipeline)
-_EMPTY_PATHTEMP: PathTemplate = make_empty_instance(PathTemplate)
-
-
 class IOContext:
     """
     The I/O context class specifies the format of incoming and outgoing data (which may or may not be the same -
@@ -484,10 +496,12 @@ class IOContext:
     are required to create requests for resources and register data processing pipelines.
     The context object also stores information about the data path pattern.
 
-    Args:
+    Attributes:
         in_format (str): format of incoming data.
         out_format (str): the format in which the data should be saved.
         storage (BaseBufferableStorage): storage in which the data will be stored.
+        path_temp (PathTemplate): path generator for storing data in storage. See PathTemplate for details.
+        pipeline (IOBoundPipeline): a pipeline object initiated within the current I/O context. See IOBoundPipeline for details.
     """
 
     def __init__(
@@ -497,12 +511,18 @@ class IOContext:
         out_format: str,
         storage: BaseBufferableStorage,
     ) -> None:
+        """
+        Args:
+            in_format (str): format of incoming data.
+            out_format (str): the format in which the data should be saved.
+            storage (BaseBufferableStorage): storage in which the data will be stored.
+        """
         self.in_format: str = in_format
         self.out_format: str = out_format
         self._check_io()
         self.storage: BaseBufferableStorage = storage
-        self.path_temp: PathTemplate = _EMPTY_PATHTEMP
-        self.pipeline: IOBoundPipeline = _EMPTY_PIPELINE
+        self.path_temp: PathTemplate | Undefined = YassUndefined
+        self.pipeline: IOBoundPipeline | Undefined = YassUndefined
 
     @property
     def out_path(self) -> str:
@@ -514,7 +534,7 @@ class IOContext:
         """
         return self.path_temp.render_path(self.out_format)
 
-    def attache_pipline(self) -> IOBoundPipeline:
+    def attache_pipeline(self) -> IOBoundPipeline:
         """
         Method creates and links a data processing pipeline.
 
@@ -524,14 +544,14 @@ class IOContext:
         self.pipeline = IOBoundPipeline(self)
         return self.pipeline
 
-    def attache_pathgenerator(self) -> PathTemplate:
+    def attache_pathgenerator(self, is_local: bool = False) -> PathTemplate:
         """
         The method creates and binds an instance of the data path template.
 
         Returns:
             PathTemplate: data path template instance.
         """
-        path_temp = PathTemplate()
+        path_temp = PathTemplate(is_local)
         self.path_temp = path_temp
         return path_temp
 

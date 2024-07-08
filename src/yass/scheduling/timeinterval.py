@@ -111,7 +111,14 @@ class DailyInterval:
 
 
 AllowedWeekDays = Literal[1, 2, 3, 4, 5, 6, 7]
+"""
+The type of valid values ​​for the days of the week.
+"""
 WeekDaysType = Iterable[AllowedWeekDays]
+"""
+Type of container with digital designation of days of the week.
+
+"""
 
 
 class WeekdayInterval:
@@ -143,7 +150,7 @@ class WeekdayInterval:
         """
         self._interval = weekday_interval
         self._weekday_it = cycle(set(sorted(weekday_interval)))
-        self.current_weekday: AllowedWeekDays = next(self.weekday_it)
+        self.current_weekday: AllowedWeekDays = next(self._weekday_it)
         self.start: time = dateparser.parse(start_time).time()  # type: ignore
         self.end: time = dateparser.parse(end_time).time()  # type: ignore
         self.launch: datetime = (

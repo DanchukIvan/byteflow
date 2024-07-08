@@ -5,27 +5,28 @@ from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Literal, Self, overload
 
 from yass.core import YassCore
+from yass.scheduling import AlwaysRun
 
 if TYPE_CHECKING:
     from aiohttp import ClientResponse
 
     from yass.contentio import IOContext
-    from yass.scheduling import ActionCondition, AlwaysRun
+    from yass.scheduling import ActionCondition
 
 __all__ = ["ApiEORTrigger", "BaseResource", "BaseResourceRequest"]
 
 
 class BaseResourceRequest(YassCore):
     """
-    Base class for resource request objects. The request object forms part of the resource processing
-    context and generates URLs to which the resource will be processed (the implementation of this
-    functionality depends on what type of resource the request is being prepared for). Each resource
-    can have an unlimited number of requests - it all depends on how the resource is logically divided
-    and which parts of it are required by the user.
+    Base class for resource request objects. The request object forms part
+    of the resource processing context and generates URLs to which the
+    resource will be processed (the implementation of this functionality
+    depends on what type of resource the request is being prepared for).
+    Each resource can have an unlimited number of requests - it all depends
+    on how the resource is logically divided and which parts of it are required by the user.
 
     Args:
         name (str): request name. Must be unique within a single resource.
-        base_url (str): url address of the resource. As a rule, this is a full-fledged link without dynamic parts of the URL address.
         io_context (IOContext): I/O context instance. Specifies the actions that need to be performed with the data obtained as a
                                 result of the request execution (in what format to deserialize, where to save, whether the information needs to be further processed, and so on).
         collect_interval (ActionCondition, optional): request activity interval. See ActionCondition for details. Defaults to AlwaysRun().
@@ -35,13 +36,11 @@ class BaseResourceRequest(YassCore):
     def __init__(
         self,
         name: str,
-        base_url: str,
         io_context: IOContext,
         collect_interval: ActionCondition = AlwaysRun(),
         has_pages: bool = True,
     ):
         self.name: str = name
-        self.base_url: str = base_url
         self.io_context: IOContext = io_context
         self.collect_interval: ActionCondition = collect_interval
         self.has_pages: bool = has_pages
@@ -71,12 +70,14 @@ class BaseResourceRequest(YassCore):
 
 class BaseResource(YassCore):
     """
-    Base class for resources. Essentially, the Resource class is an abstraction of the entry point
-    for interacting with some real data source (in the case of Yass, a network resource like a site
-    or api). The class accumulates information about restrictions on the use of a data source,
-    including the permissible frequency of accessing it, all planned queries to the source, and
-    other information that forms the context for working with the data source.
-    \nAt the moment, only the resource API implementation is available.
+    Base class for resources. Essentially, the Resource class is an
+    abstraction of the entry point for interacting with some real data source
+    (in the case of Yass, a network resource like a site or api). The class
+    accumulates information about restrictions on the use of a data source,
+    including the permissible frequency of accessing it, all planned queries
+    to the source, and other information that forms the context for
+    working with the data source.
+    At the moment, only the resource API implementation is available.
 
     Args:
         url (str): url address of the resource. As a rule, this is a full-fledged link without dynamic parts of the URL address.
