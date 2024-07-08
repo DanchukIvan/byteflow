@@ -29,6 +29,17 @@ _LIMIT_TYPE = Literal["unable", "memory", "count", "time"]
 
 
 def limit(limit_type: str) -> Callable[[type[BaseLimit]], type[BaseLimit]]:
+    """
+    A decorator for registering limit classes in the corresponding factory.
+
+    Args:
+        limit_type (str): name of the limit. It is highly desirable that it reflects the real meaning of the registered limit class.
+
+    Returns:
+        Callable: returns the registration function. Based on the results of the entire chain of calls,
+                the specified function will return the registered class without changes.
+    """
+
     def registred_limit(cls: type[BaseLimit]) -> type[BaseLimit]:
         _LIMIT_MAP[limit_type] = cls
         return cls
@@ -39,11 +50,28 @@ def limit(limit_type: str) -> Callable[[type[BaseLimit]], type[BaseLimit]]:
 def setup_limit(
     limit_type: str, capacity: Any, storage: BaseBufferableStorage
 ) -> BaseLimit:
+    """
+    Factory function that returns an instance of the limits class.
+
+    Args:
+        limit_type (str): limit type.
+        capacity (Any): volume limit.
+        storage (BaseBufferableStorage): the storage to which the limit will be associated.
+
+    Returns:
+        BaseLimit: instance of the limit class of the selected type.
+    """
     limit_instance: BaseLimit = _LIMIT_MAP[limit_type](storage, capacity)
     return limit_instance
 
 
 def get_allowed_limits() -> list[tuple[str, BaseLimit]]:
+    """
+    The function returns all currently available limit classes as a container.
+
+    Returns:
+        list (tuple[str, BaseLimit]): list of tuples with pairs limit name - limit class object.
+    """
     return list((k, v) for k, v in _LIMIT_MAP.items())
 
 

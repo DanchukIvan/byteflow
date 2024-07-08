@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from asyncio import Task
+from collections.abc import AsyncGenerator, Callable
 from datetime import date
 from time import time
 from typing import TYPE_CHECKING
@@ -9,7 +10,7 @@ from urllib.parse import urlparse
 
 from rich.pretty import pprint as rpp
 
-from yass.contentio import PathSegment, PathTemplate
+from yass.contentio import PathTemplate
 from yass.core import YassCore
 from yass.storages.base import BaseBufferableStorage
 
@@ -32,12 +33,26 @@ class BaseDataCollector(YassCore):
     to a resource, a data collector is created.
     At the moment, only work with API resources is available.
 
-    Args:
-        query (ApiRequest): an instance of the request to the resource for which the data collector is being created.
-        resource (ApiResource): a resource from which additional information is retrieved to initialize the data collector.
+    Attributes:
+        delay (int | float): delay before sending requests.
+        timeout (int | float): waiting time for a response from the data source.
+        collect_trigger (ActionCondition): a trigger, the firing of which allows you to begin processing the data source.
+        eor_status (bool): the status of no payload in the data source.
+        _write_channel (ContentQueue): a buffer in memory in which data is stored before uploading to the backend.
+        url_series (AsyncGenerator): a link generator created by a Request instance.
+        pipeline (IOBoundPipeline): an instance of the pipeline class associated with a request that is processed by the data collector.
+        input_format (str): format of incoming data.
+        output_format (str): the format in which the data should be saved.
+        path_producer (PathTemplate): data path generator.
     """
 
     def __init__(self, resource: BaseResource, query: BaseResourceRequest):
+        """
+        Args:
+            query (ApiRequest): an instance of the request to the resource for which the data collector is being created.
+            resource (ApiResource): a resource from which additional information is retrieved to initialize the data collector.
+        """
+        self._name: str = query.name
         self.delay: int | float = resource.delay
         self.timeout: int | float = resource.request_timeout
         self.collect_trigger: ActionCondition = query.collect_interval
@@ -45,43 +60,24 @@ class BaseDataCollector(YassCore):
         storage: BaseBufferableStorage = io_context.storage
         self.eor_status = False
         self._write_channel: ContentQueue = storage.create_buffer(query)
-        self.url_series = query.gen_url
+        self.url_series: Callable[..., AsyncGenerator[str, None]] = (
+            query.gen_url
+        )
         self.pipeline: IOBoundPipeline = io_context.pipeline
         self.input_format: str = io_context.in_format
         self.output_format: str = io_context.out_format
         if io_context.path_temp:
             self.path_producer: PathTemplate = io_context.path_temp
         else:
-            self.path_producer = self._make_default_path(resource, query)
-
-    def _make_default_path(
-        self, resource: BaseResource, query: BaseResourceRequest
-    ) -> PathTemplate:
-        """
-        The method generates a default path template, consisting of the resource url, request
-        name and a compound string (date, request name, timestamp) if no path generation template
-        is specified for the request to the resource.
-        There is a high probability that the generated template will not meet the user's needs.
-        This method is called only when the data collector is initialized.
-
-        Args:
-            resource (BaseResource): a resource from which additional information is retrieved to initialize the data collector.
-            query (BaseResourceRequest): an instance of the request to the resource for which the data collector is being created.
-
-        Returns:
-            PathTemplate: automatically generated path template.
-        """
-        rpp(
-            "Генератор пути для сохранения файлов не задан. Будет сформирован дефолтный путь"
-        )
-        root = PathSegment("", 1, [urlparse(resource.url)[1]])
-        folder = PathSegment("", 2, [query.name])
-        file = PathSegment("_", 3, [date.today, query.name, time])
-        path = PathTemplate([root, folder, file], is_local=False)
-        rpp(
-            f"Пример сформированного дефолтного пути: {path.render_path(self.output_format)}"
-        )
-        return path
+            self.path_producer = io_context.attache_pathgenerator()
+            self.path_producer.add_segment("", 1, [urlparse(resource.url)[1]])
+            self.path_producer.add_segment("", 2, [query.name])
+            self.path_producer.add_segment(
+                "_", 3, [date.today, query.name, time]
+            )
+            rpp(
+                f"Пример сформированного дефолтного пути: {self.path_producer.render_path(self.output_format)}"
+            )
 
     @abstractmethod
     async def start(self) -> Task:
