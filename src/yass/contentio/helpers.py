@@ -4,25 +4,18 @@ from functools import partial
 from importlib import import_module
 from inspect import Parameter, Signature, signature
 from io import BytesIO
-from typing import (
-    Any,
-    NoReturn,
-    get_args,
-    get_origin,
-    get_overloads,
-    get_type_hints,
-)
+from typing import Any, get_args, get_origin, get_overloads, get_type_hints
 
-__all__: list[str] = [
-    "_update_sign",
-    "_resolve_annotation",
-    "_handle_generic",
-    "_check_input_sig",
-    "_check_output_sig",
+__all__ = [
+    "check_input_sig",
+    "check_output_sig",
+    "handle_generic",
+    "resolve_annotation",
+    "update_sign",
 ]
 
 
-def _update_sign(func: Callable, extra_kwargs: dict[str, Any]) -> Callable:
+def update_sign(func: Callable, extra_kwargs: dict[str, Any]) -> Callable:
     """
     Updates the default values ​​in the parameters of a given function.
     Value binding occurs by argument name, regardless of whether
@@ -66,9 +59,7 @@ def _update_sign(func: Callable, extra_kwargs: dict[str, Any]) -> Callable:
     return func
 
 
-def _resolve_annotation(
-    annot: Any, annot_owner: Any
-) -> tuple[type, ...] | NoReturn:
+def resolve_annotation(annot: Any, annot_owner: Any) -> tuple[type, ...]:
     """
     Converts the string representation of an annotation to a class.
     Ignores None annotation.
@@ -83,7 +74,11 @@ def _resolve_annotation(
     Returns:
         tuple[type, ...] | NoReturn: a tuple with classes corresponding to the annotation (except None).
     """
-    module_name = str(annot_owner.__module__)
+    module_name = (
+        str(annot_owner.__module__)
+        if not isinstance(annot_owner, str)
+        else annot_owner
+    )
     cnt_split = module_name.count(".")
     if isinstance(annot, str):
         not_resolved = []
@@ -134,7 +129,7 @@ _f: Callable[[type, Any, Parameter], bool] = (
 )
 
 
-def _handle_generic(
+def handle_generic(
     param: Parameter, annotation: Any, target_type: type
 ) -> bool:
     """
@@ -154,7 +149,7 @@ def _handle_generic(
     return status
 
 
-def _check_input_sig(func: Callable) -> bool:
+def check_input_sig(func: Callable) -> bool:
     """
     Validates the signature of the function used to deserialize data.
     Such a function must take a bytes object as its first parameter.
@@ -172,15 +167,15 @@ def _check_input_sig(func: Callable) -> bool:
         try:
             annot = get_type_hints(overload_sign)[param.name]
         except Exception:
-            annot: tuple[type, ...] = _resolve_annotation(
+            annot: tuple[type, ...] = resolve_annotation(
                 param.annotation, func
             )
-        if status := _handle_generic(param, annot, bytes):
+        if status := handle_generic(param, annot, bytes):
             return status
     return False
 
 
-def _check_output_sig(func: Callable) -> bool:
+def check_output_sig(func: Callable) -> bool:
     """
     Validates a function for data serialization. Such a function must take a byte buffer object (BytesIO) as its second argument.
 
@@ -198,7 +193,7 @@ def _check_output_sig(func: Callable) -> bool:
             annot = get_type_hints(overload_sign)[param.name]
         except Exception:
             module_name = str(func.__module__)
-            annot = _resolve_annotation(param.annotation, module_name)
-        if status := _handle_generic(param, annot, BytesIO):
+            annot = resolve_annotation(param.annotation, module_name)
+        if status := handle_generic(param, annot, BytesIO):
             return status
     return False
