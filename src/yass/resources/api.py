@@ -5,18 +5,19 @@ from collections.abc import (
     AsyncGenerator,
     AsyncIterator,
     Callable,
+    Generator,
     Iterable,
     Iterator,
     MutableMapping,
     MutableSequence,
 )
-from itertools import count, zip_longest
+from functools import cached_property
+from itertools import count, product, zip_longest
 from typing import TYPE_CHECKING, Any, Literal, Self, cast, overload
 
 from aioitertools.itertools import product as async_product
-from rich.pretty import pprint as rpp
 
-from yass.core import make_empty_instance, reg_type
+from yass.core import Undefined, YassUndefined, reg_type
 from yass.resources.base import (
     ApiEORTrigger,
     BaseResource,
@@ -28,7 +29,11 @@ __all__ = [
     "ApiResource",
     "BatchCounter",
     "ContentLengthEORTrigger",
+    "EndpointPath",
+    "FixEndpointSection",
     "MaxPageEORTrigger",
+    "MutableEndpointSection",
+    "SimpleEORTrigger",
     "StatusEORTrigger",
 ]
 
@@ -39,6 +44,84 @@ if TYPE_CHECKING:
     from yass.scheduling import ActionCondition, AlwaysRun
 
 
+class FixEndpointSection:
+    section_type = "fix"
+
+    def __init__(self, value: str | list[str], prior: int = 0):
+        self.prior: int = prior
+        self.value: Iterable[str] = (
+            value if isinstance(value, list) else [value]
+        )
+        self._current_gen: Generator[str, Any, None] | None = None
+
+    @cached_property
+    def fix_url_part(self) -> str:
+        return "/".join(self.value)
+
+    def __str__(self) -> str:
+        return self.fix_url_part
+
+
+class MutableEndpointSection:
+    section_type = "mutable"
+
+    def __init__(self, value: str | list[str], prior: int = 0):
+        self.prior: int = prior
+        self.value: Iterable[str] = (
+            value if isinstance(value, list) else [value]
+        )
+        self._current_gen: Generator[str, Any, None] | None = None
+
+    def _make_mutable_url_part(self) -> Generator[str, Any, None]:
+        yield from self.value
+
+    def mutable_url_part(self) -> str:
+        if self._current_gen is None:
+            self._current_gen = self._make_mutable_url_part()
+        try:
+            part: str = next(self._current_gen)
+        except StopIteration:
+            self._current_gen = None
+            raise StopIteration
+        return part
+
+    def __str__(self) -> str:
+        return self.mutable_url_part()
+
+
+class EndpointPath:
+    def __init__(self, id_name: str, base_url: str):
+        self.base_url = base_url
+        self.parts: list[FixEndpointSection | MutableEndpointSection] = []
+        self.template: str = ""
+        self.last_prior = 0
+
+    def add_fix_part(self, value: str | list[str], prior: int | None = 0):
+        if not prior:
+            prior = self.last_prior
+        self.parts.append(FixEndpointSection(value, prior))
+        self.last_prior += 1
+
+    def add_mutable_parts(self, value: list[str], prior: int | None = 0):
+        if not prior:
+            prior = self.last_prior
+        self.parts.append(MutableEndpointSection(value, prior))
+        self.last_prior += 1
+
+    def get_extended_base(self) -> Generator[str, Any, None]:
+        if not self.template:
+            self.parts.sort(key=lambda x: x.prior)
+            temp_details = [
+                str(s) if s.section_type == "fix" else "{}" for s in self.parts
+            ]
+            self.template = f"{self.base_url}/" + "/".join(temp_details)
+        mut_parts_gen = product(
+            *[s.value for s in self.parts if s.section_type == "mutable"]
+        )
+        for mpart in mut_parts_gen:
+            yield self.template.format(*mpart)
+
+
 @reg_type("api_req")
 class ApiRequest(BaseResourceRequest):
     """
@@ -46,10 +129,9 @@ class ApiRequest(BaseResourceRequest):
 
     Args:
         name (str): request ID.
-        base_url (str): base url of the resource. The basic url is one that allows you to later create a
-                        valid url by adding dynamic parts (query parameters, authorization lines, etc.).
-        persist_fields (MutableMapping[str, str]): HTTP request parameters that do not change from request to request.
-        mutable_fields (MutableMapping[str, MutableSequence]): HTTP request parameters that change from request to request.
+        endpoint (EndpointPath): the API endpoint that will be processed by this request.
+        fix_params (MutableMapping[str, str]): HTTP request parameters that do not change from request to request.
+        mutable_params (MutableMapping[str, MutableSequence]): HTTP request parameters that change from request to request.
         io_context (IOContext): I/O context instance. Specifies the actions that need to be performed with the data obtained as a
                                 result of the request execution (in what format to deserialize, where to save, whether the information needs to be further processed, and so on).
         collect_interval (ActionCondition, optional): request activity interval. See ActionCondition for details. Defaults to AlwaysRun().
@@ -59,19 +141,19 @@ class ApiRequest(BaseResourceRequest):
     def __init__(
         self,
         name: str,
-        base_url: str,
-        persist_fields: MutableMapping[str, str],
-        mutable_fields: MutableMapping[str, MutableSequence],
+        endpoint: EndpointPath,
         io_context: IOContext,
         collect_interval: ActionCondition = AlwaysRun(),
+        fix_params: MutableMapping[str, str] | Undefined = YassUndefined,
+        mutable_params: MutableMapping[str, MutableSequence]
+        | Undefined = YassUndefined,
         has_pages: bool = True,
     ) -> None:
-        super().__init__(
-            name, base_url, io_context, collect_interval, has_pages
-        )
-        self.persist_fields: MutableMapping[str, str] = persist_fields
-        self.mutable_fields: MutableMapping[str, MutableSequence] = (
-            mutable_fields
+        super().__init__(name, io_context, collect_interval, has_pages)
+        self.endpoint: EndpointPath = endpoint
+        self.fix_params: MutableMapping[str, str] = fix_params
+        self.mutable_params: MutableMapping[str, MutableSequence] = (
+            mutable_params
         )
 
     def get_io_context(self) -> IOContext:
@@ -100,9 +182,9 @@ class ApiRequest(BaseResourceRequest):
             params (dict|list|tuple): either a dictionary with one key-value pair, or a tuple or list with two elements.
         """
         if isinstance(params, (list, tuple)):
-            self.persist_fields.__setitem__(*params)
+            self.fix_params.__setitem__(*params)
         else:
-            self.persist_fields.update(params)
+            self.fix_params.update(params)
 
     @overload
     def set_mutable_field(self, params: tuple[str, list]) -> None: ...
@@ -118,9 +200,9 @@ class ApiRequest(BaseResourceRequest):
             params (dict|list|tuple): either a dictionary with one key-value pair, or a tuple or list with two elements.
         """
         if isinstance(params, (list, tuple)):
-            self.mutable_fields.__setitem__(*params)
+            self.mutable_params.__setitem__(*params)
         else:
-            self.mutable_fields.update(params)
+            self.mutable_params.update(params)
 
     def _build_mf_iterator(self) -> AsyncIterator[tuple[tuple[str, str], ...]]:
         """
@@ -132,7 +214,7 @@ class ApiRequest(BaseResourceRequest):
         """
         mf_lst: list[Iterator[tuple[str, str]]] = [
             zip_longest([key], value, fillvalue=key)
-            for key, value in self.mutable_fields.items()
+            for key, value in self.mutable_params.items()
         ]
         iterator: AsyncIterator[tuple[tuple[str, str], ...]] = async_product(
             *mf_lst
@@ -146,7 +228,7 @@ class ApiRequest(BaseResourceRequest):
         Returns:
             AsyncGenerator (str): query parameter string generator.
         """
-        if self.mutable_fields:
+        if isinstance(self.mutable_params, dict):
             iterator: AsyncIterator[tuple[tuple[str, Any | str], ...]] = (
                 self._build_mf_iterator()
             )
@@ -165,10 +247,9 @@ class ApiRequest(BaseResourceRequest):
         Returns:
             AsyncGenerator (str): query parameter string generator.
         """
-        if self.persist_fields:
+        if isinstance(self.fix_params, dict):
             persist_part: str = "?" + "&".join(
-                f"{name}={value}"
-                for name, value in self.persist_fields.items()
+                f"{name}={value}" for name, value in self.fix_params.items()
             )
             yield persist_part
         else:
@@ -188,18 +269,30 @@ class ApiRequest(BaseResourceRequest):
             yield full_string
 
     async def gen_url(self) -> AsyncGenerator[str, Any]:
-        async for query_part in self._build_full_query():
-            base: str = f"{self.base_url}{query_part}"
-            if self.has_pages:
-                for page in count(1, 1):
-                    url = f"{base}&page={page}"
-                    sentinel: bool = yield url
+        for extended_url in self.endpoint.get_extended_base():
+            async for query_part in self._build_full_query():
+                base: str = f"{extended_url}{query_part}"
+                if self.has_pages:
+                    for page in count(1, 1):
+                        url = f"{base}&page={page}"
+                        sentinel: bool = yield url
+                        if sentinel:
+                            break
+                else:
+                    sentinel = yield base
                     if sentinel:
                         break
-            else:
-                sentinel = yield base
-                if sentinel:
-                    break
+
+
+class SimpleEORTrigger(ApiEORTrigger):
+    def __init__(self, max_rounds: int):
+        self.max_rounds: int = max_rounds
+        self.current_rounds: int = 0
+        self.search_type = "headers"
+
+    def is_end_of_resource(self, response: ClientResponse) -> bool:
+        self.current_rounds += 1
+        return self.current_rounds <= self.max_rounds
 
 
 class MaxPageEORTrigger(ApiEORTrigger):
@@ -241,7 +334,7 @@ class MaxPageEORTrigger(ApiEORTrigger):
 
     def _handle_content(self, response: bytes) -> bool:
         content = self.content_handler(response)
-        rpp(
+        print(
             f"Обработано страниц {content[self.fields[0]]} из {content[self.fields[1]]}."
         )
         return int(content[self.fields[0]]) <= int(content[self.fields[1]])
@@ -332,19 +425,19 @@ class BatchCounter:
             int: batch size.
         """
         self.active_tasks += 1
-        rpp(
+        print(
             f"Количество активных задач на текущий момент {self.active_tasks}."
         )
         # async with self.count_lock:
         async with self.count_lock:
-            rpp("Ожидаю освобождения блокировок.")
+            print("Ожидаю освобождения блокировок.")
             if self.barrier < min(self.min_batch):
                 await self.zero_control.wait()
-            rpp("Блокировки захвачены.")
+            print("Блокировки захвачены.")
             acquire_size: int = max(self.barrier, *self.min_batch)
-            rpp(f"Захваченный лимит составляет {acquire_size}.")
+            print(f"Захваченный лимит составляет {acquire_size}.")
             self.barrier = self.barrier - acquire_size
-            rpp(f"Доступный лимит составляет {self.barrier}.")
+            print(f"Доступный лимит составляет {self.barrier}.")
         self.zero_control.clear()
         return acquire_size
 
@@ -356,7 +449,7 @@ class BatchCounter:
             current_size (int): current batch size.
         """
         self.barrier += current_size
-        rpp(
+        print(
             f"Высвободился лимит на {current_size} запросов. Доступный лимит составляет {self.barrier}."
         )
         self.active_tasks -= 1
@@ -381,7 +474,7 @@ class BatchCounter:
         else:
             standart_batch: int = min(self.min_batch)
             if (new_batch := current_size - standart_batch) > 0:
-                rpp(
+                print(
                     f"Пересчет размера батча. Текущий размер составляет {current_size}, избыток захваченных батчей составляет {standart_batch}."
                 )
                 self.barrier += standart_batch
@@ -391,7 +484,6 @@ class BatchCounter:
         return new_batch
 
 
-_EMPTY_EOR_TRIGGER: ApiEORTrigger = make_empty_instance(ApiEORTrigger)
 """
 Stub for an API trigger (see “empty” class for more details).
 """
@@ -416,16 +508,17 @@ class ApiResource(BaseResource):
         url: str,
         *,
         extra_headers: dict = {},
-        eor_triggers: list[ApiEORTrigger] = [_EMPTY_EOR_TRIGGER],
+        eor_triggers: list[ApiEORTrigger] | Undefined = YassUndefined,
         max_batch: int = 1,
         delay: int | float = 1,
         request_timeout: int | float = 5,
     ):
         super().__init__(url, delay=delay, request_timeout=request_timeout)
         self.max_batch: int = max_batch
+        self.endpoints: dict[str, EndpointPath] = {}
         self.batch = BatchCounter(self)
         self.extra_headers: dict = extra_headers
-        self.eor_triggers: list[ApiEORTrigger] = eor_triggers
+        self.eor_triggers: list[ApiEORTrigger] | Undefined = eor_triggers
 
     def configure(
         self,
@@ -452,26 +545,35 @@ class ApiResource(BaseResource):
             setattr(self, param, value)
         return self
 
+    def add_endpoint(self, endpoint_id: str):
+        endpoint = EndpointPath(endpoint_id, self.url)
+        self.endpoints[endpoint_id] = endpoint
+        return endpoint
+
     def make_query(
         self,
         name: str,
-        persist_fields: MutableMapping[str, str],
-        mutable_fields: MutableMapping[str, MutableSequence],
+        endpoint: EndpointPath | str,
         io_context: IOContext,
         collect_interval: ActionCondition = AlwaysRun(),
         has_pages: bool = True,
         replace: bool = False,
+        fix_params: MutableMapping[str, str] | Undefined = YassUndefined,
+        mutable_params: MutableMapping[str, MutableSequence]
+        | Undefined = YassUndefined,
     ) -> ApiRequest:
         if name in self.queries and not replace:
             msg = "Запрос к ресурсу с таким именем уже существует. Если требуется заменить запрос, установите 'replace=True'."
             raise AttributeError(msg) from None
         query = ApiRequest(
             name,
-            self.url,
-            persist_fields,
-            mutable_fields,
+            endpoint
+            if isinstance(endpoint, EndpointPath)
+            else self.endpoints[endpoint],
             io_context,
             collect_interval,
+            fix_params,
+            mutable_params,
             has_pages,
         )
         self.queries[name] = query
