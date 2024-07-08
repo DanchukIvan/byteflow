@@ -1,23 +1,17 @@
-"""
-The module contains implementations of various storage managers.
-At the moment, only one implementation is presented - Storage Manager - which is used
-in data extraction tasks that do not require immediate storage in the storage backend.
-"""
-
 from __future__ import annotations
 
 from asyncio import wait_for
 from collections.abc import Callable, Iterable
 from copy import copy
 from pathlib import Path
-from typing import Any, Literal, ParamSpec, TypeAlias, TypeVar, cast
+from typing import Any, Literal, ParamSpec, TypeVar, cast
 
 from fsspec import available_protocols, get_filesystem_class
 from fsspec.asyn import AsyncFileSystem
 from rich.pretty import pprint as rpp
 
 from yass.contentio import deserialize, serialize
-from yass.core import make_empty_instance, reg_type
+from yass.core import Undefined, YassUndefined, reg_type
 from yass.storages import BaseBufferableStorage, engine_factory
 from yass.storages.base import ContentQueue
 
@@ -29,13 +23,17 @@ __all__ = [
     "mk_path",
     "read",
     "upload",
+    "ls_storage",
 ]
 
 _P = ParamSpec("_P")
 _V = TypeVar("_V", bound=AsyncFileSystem)
-_StorageFabric: TypeAlias = Callable[_P, _V]
-_FSSpecEngine: TypeAlias = AsyncFileSystem
-_EMPTY_FSSPEC: AsyncFileSystem = make_empty_instance(AsyncFileSystem)
+_StorageFabric = Callable[_P, _V]
+_FSSpecEngine = AsyncFileSystem
+
+
+def ls_storage(engine: _FSSpecEngine, anypath: str):
+    return engine.find(anypath)
 
 
 def upload(engine: _FSSpecEngine, content: bytes, path: str) -> None:
@@ -111,8 +109,7 @@ def check_path(
     Args:
         engine (_FSSpecEngine): asynchronous storage engine.
         path (str): the path to be checked
-        autocreate (bool, optional): a flag that determines whether to create an object according to the path automatically.
-        Defaults to True.
+        autocreate (bool): a flag that determines whether to create an object according to the path automatically. Defaults to True.
 
     Returns:
         bool: an indicator of the existence of a path.
@@ -144,7 +141,7 @@ class FsBlobStorage(BaseBufferableStorage):
 
     def __init__(
         self,
-        engine: _FSSpecEngine = _EMPTY_FSSPEC,
+        engine: Undefined | _FSSpecEngine = YassUndefined,
         *,
         handshake_timeout: int = 10,
         bufferize: bool = True,
@@ -200,8 +197,8 @@ class FsBlobStorage(BaseBufferableStorage):
                 "Захвачена внутренняя блокировка буфера для выгрузки контента."
             )
             old_content: dict[str, Any] = copy(buf.queue)
-            buf.reset()
-            await self._recalc_counters()
+            print("Old content")
+            print(old_content)
             content_format: str = buf.out_format
             rpp(f"Очищаю содержимое буфера {buf} после копирования.")
             rpp(f"Перехожу к загрузке контента в хранилище.")
@@ -211,6 +208,8 @@ class FsBlobStorage(BaseBufferableStorage):
                     path, serialize(data, content_format)
                 )
             rpp(f"Завершил загрузку контекта в хранилище.")
+            buf.reset()
+            await self._recalc_counters()
 
         rpp(f"Процесс выгрузки данных в хранилище завершен.")
 
@@ -224,9 +223,10 @@ def create_fsspec_engine(
     Returns an error if the engine does not support asynchronous execution of operations.
 
     Args:
-        proto (str): a string with the name of the storage engine protocol. For a list of supported protocols, see ...
-        engine_kwargs (dict[str, Any]): a dictionary with storage engine parameters. For mandatory and optional parameters,
-        see the corresponding implementation of the fsspec protocol, also via the function...
+        proto (str): a string with the name of the storage engine protocol. For a list of supported protocols
+                    see fsspec known implementations.
+        engine_kwargs (dict[str, Any]): a dictionary with storage engine parameters. For mandatory and optional parameters
+                                        see the corresponding implementation of the fsspec protocol.
 
     Returns:
         _FSSpecEngine: asynchronous implementation of the storage engine.
