@@ -77,32 +77,32 @@ markdown_extensions:
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
 
 nav:
-  - Welcome to Yass: docs/index.md
+  - Welcome to Yass: index.md
   - Understanding Yass:
-      - Main components: docs/about/concepts.md
+      - Main components: about/concepts.md
       - Tutorial:
-          - Let's get started: docs/about/tutorial/step_1.md
-          - I/O Configuration: docs/about/tutorial/step_2.md
-          - Run it: docs/about/tutorial/step_3.md
+          - Let's get started: about/tutorial/step_1.md
+          - I/O Configuration: about/tutorial/step_2.md
+          - Run it: about/tutorial/step_3.md
   - API documentation:
-      - About the API section: docs/api/about_section.md
-      - Entrypoint: docs/api/yass.md
+      - About the API section: api/about_section.md
+      - Entrypoint: api/yass.md
       - Working with content:
-          - ContentIO: docs/api/contentio.md
-          - Common: docs/api/common.md
-          - Utilities: docs/api/helpers.md
+          - ContentIO: api/contentio.md
+          - Common: api/common.md
+          - Utilities: api/helpers.md
       - Data collectors:
-          - Base: docs/api/base_data_collectors.md
+          - Base: api/base_data_collectors.md
           - Implementations:
-              - API data collector: docs/api/api_data_collectors.md
+              - API data collector: api/api_data_collectors.md
       - Resources:
-          - Base: docs/api/base_resources.md
+          - Base: api/base_resources.md
           - Implementations:
-              - API resources: docs/api/api_resources.md
+              - API resources: api/api_resources.md
       - Scheduling:
-          - Base: docs/api/base_scheduling.md
-          - Implementations: docs/api/scheduling.md
+          - Base: api/base_scheduling.md
+          - Implementations: api/scheduling.md
       - Storages backends:
-          - Base: docs/api/base_storages.md
-          - Implementations: docs/api/blob_storage.md
-      - Miscellaneous utilities: docs/api/misc_utils.md
+          - Base: api/base_storages.md
+          - Implementations: api/blob_storage.md
+      - Miscellaneous utilities: api/misc_utils.md
