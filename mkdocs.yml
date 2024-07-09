@@ -41,10 +41,16 @@ plugins:
             show_docstring_modules: true
             merge_init_into_class: true
             show_signature_annotations: true
+  - mike:
+      alias_type: symlink
+      canonical_version: latest
+
 extra:
   generator: true
   version:
     provider: mike
+    alias: true
+    default: latest
 
 markdown_extensions:
   - attr_list
