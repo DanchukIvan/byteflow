@@ -29,13 +29,18 @@ if TYPE_CHECKING:
 
 class EORTriggersResolver:
     """
-    The class parses the status of all triggers set for a resource and returns an indicator for the end of the resource.
+     The class parses the status of all triggers set for a resource and returns an indicator for the end of the resource.
 
-    Args:
-        resource (ApiResource): the resource from which triggers will be retrieved. At the moment, such a resource can only be API resources.
+    Attributes:
+         content_searchers (list[ApiEORTrigger]): a list of triggers that check the fulfillment of a condition based on the content of the content.
+         headers_searchers (list[ApiEORTrigger]): a list of triggers that check whether a condition is met based on the contents of the headers.
     """
 
     def __init__(self, resource: ApiResource):
+        """
+        Args:
+            resource (ApiResource): the resource from which triggers will be retrieved. At the moment, such a resource can only be API resources.
+        """
         self.content_searchers: list[ApiEORTrigger] = list()
         self.headers_searchers: list[ApiEORTrigger] = list()
         self._resolve_searchers(resource.eor_triggers)
@@ -109,7 +114,6 @@ class ApiDataCollector(BaseDataCollector):
         timeout (int | float): waiting time for a response from the data source.
         collect_trigger (ActionCondition): a trigger, the firing of which allows you to begin processing the data source.
         eor_status (bool): the status of no payload in the data source.
-        _write_channel (ContentQueue): a buffer in memory in which data is stored before uploading to the backend.
         url_series (AsyncGenerator): a link generator created by a Request instance.
         pipeline (IOBoundPipeline): an instance of the pipeline class associated with a request that is processed by the data collector.
         input_format (str): format of incoming data.

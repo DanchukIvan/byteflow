@@ -23,11 +23,11 @@ def update_sign(func: Callable, extra_kwargs: dict[str, Any]) -> Callable:
     Acts like partial, but allows specific updates of arguments.
 
     Args:
-        func (Callable): Target function.
-        extra_kwargs (dict[str, Any]): A dict of arguments and values ​​that need to be associated with the function.
+        func (Callable): target function.
+        extra_kwargs (dict[str, Any]): a dict of arguments and values ​​that need to be associated with the function.
 
     Returns:
-        Callable: Function with updated default arguments.
+        Callable: function with updated default arguments.
     """
     if not extra_kwargs:
         return func
@@ -65,14 +65,14 @@ def resolve_annotation(annot: Any, annot_owner: Any) -> tuple[type, ...]:
     Ignores None annotation.
 
     Args:
-        annot (Any): The annotation to be converted.
-        annot_owner (Any): The object to which the annotation directly belongs. Can be any object containing an annotation.
+        annot (Any): the annotation to be converted.
+        annot_owner (Any): the object to which the annotation directly belongs. Can be any object containing an annotation.
 
     Raises:
-        NameError: Annotation conversion module not found. The error message indicates the module you are looking for.
+        NameError: annotation conversion module not found. The error message indicates the module you are looking for.
 
     Returns:
-        tuple[type, ...] | NoReturn: a tuple with classes corresponding to the annotation (except None).
+        tuple ([type, ...]): a tuple with classes corresponding to the annotation (except None).
     """
     module_name = (
         str(annot_owner.__module__)
@@ -136,12 +136,12 @@ def handle_generic(
     Checking whether the target type is included in the list using a function argument.
 
     Args:
-        param (Parameter): A parameter object that represents the target type.
-        annotation (Any): A tuple of annotations represented by classes.
-        target_type (type): The type to be checked to see if it is included in the arguments.
+        param (Parameter): a parameter object that represents the target type.
+        annotation (Any): a tuple of annotations represented by classes.
+        target_type (type): the type to be checked to see if it is included in the arguments.
 
     Returns:
-        bool: Boolean result of the test performed.
+        bool: boolean result of the test performed.
     """
     if annotation is None or not annotation:
         return False
@@ -155,10 +155,10 @@ def check_input_sig(func: Callable) -> bool:
     Such a function must take a bytes object as its first parameter.
 
     Args:
-        func (Callable): Function for deserializing data.
+        func (Callable): function for deserializing data.
 
     Returns:
-        bool: Boolean result of the test performed.
+        bool: boolean result of the test performed.
     """
     overloads: Sequence[Callable] = get_overloads(func) or [func]
     for overload_sign in overloads:
@@ -180,10 +180,10 @@ def check_output_sig(func: Callable) -> bool:
     Validates a function for data serialization. Such a function must take a byte buffer object (BytesIO) as its second argument.
 
     Args:
-        func (Callable): Function for serializing data.
+        func (Callable): function for serializing data.
 
     Returns:
-        bool: Boolean result of the test performed.
+        bool: boolean result of the test performed.
     """
     overloads: Sequence[Callable] = get_overloads(func) or [func]
     for overload_sign in overloads:

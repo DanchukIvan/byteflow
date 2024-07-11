@@ -45,17 +45,34 @@ if TYPE_CHECKING:
 
 
 class FixEndpointSection:
-    section_type = "fix"
+    section_type: str = "fix"
+    """
+    The part of the endpoint that does not change from request to request.
+
+    Attributes:
+        prior (int): the position occupied by this part of the endpoint in the extended part of the request link to the resource.
+        value (str): line with the name of the endpoint.
+    """
 
     def __init__(self, value: str | list[str], prior: int = 0):
+        """
+        Args:
+            prior (int): the position occupied by this part of the endpoint in the extended part of the request link to the resource.
+            value (str): line with the name of the endpoint.
+        """
         self.prior: int = prior
         self.value: Iterable[str] = (
             value if isinstance(value, list) else [value]
         )
-        self._current_gen: Generator[str, Any, None] | None = None
 
     @cached_property
     def fix_url_part(self) -> str:
+        """
+        The property returns a string representation of the fixed part of the endpoint.
+
+        Returns:
+            str: endpoint part.
+        """
         return "/".join(self.value)
 
     def __str__(self) -> str:
@@ -63,9 +80,21 @@ class FixEndpointSection:
 
 
 class MutableEndpointSection:
-    section_type = "mutable"
+    section_type: str = "mutable"
+    """
+    The variable part of the endpoint.
+
+    Attributes:
+        prior (int): the position occupied by this part of the endpoint in the extended part of the request link to the resource.
+        value (str): line with the name of the endpoint.
+    """
 
     def __init__(self, value: str | list[str], prior: int = 0):
+        """
+        Args:
+            prior (int): the position occupied by this part of the endpoint in the extended part of the request link to the resource.
+            value (str): line with the name of the endpoint.
+        """
         self.prior: int = prior
         self.value: Iterable[str] = (
             value if isinstance(value, list) else [value]
@@ -73,9 +102,24 @@ class MutableEndpointSection:
         self._current_gen: Generator[str, Any, None] | None = None
 
     def _make_mutable_url_part(self) -> Generator[str, Any, None]:
+        """
+        The method generates the next part of the endpoint.
+
+        Yields:
+            Generator: generator of string representations of endpoint parts.
+        """
         yield from self.value
 
     def mutable_url_part(self) -> str:
+        """
+        The method returns part of the endpoint from the next iteration of the generator.
+
+        Raises:
+            StopIteration: thrown if the endpoint parts generator runs out.
+
+        Returns:
+            str: endpoint part.
+        """
         if self._current_gen is None:
             self._current_gen = self._make_mutable_url_part()
         try:
@@ -90,25 +134,60 @@ class MutableEndpointSection:
 
 
 class EndpointPath:
+    """
+    The variable part of the endpoint.
+
+    Attributes:
+        base_url (str): the base url received from the resource class object.
+        parts (list[FixEndpointSection | MutableEndpointSection]): list of fixed and mutable endpoint sections. Defaults to [].
+        template (str): a final endpoint template used to expand the base url. Defaults to "".
+        last_prior (int): the serial number of the last fixed element in the list of sections. Defaults to 0.
+    """
+
     def __init__(self, id_name: str, base_url: str):
-        self.base_url = base_url
+        """
+        Args:
+            id_name (str): endpoint name. Ideally it should be identical to the real endpoint.
+            base_url (str): the base url received from the resource class object.
+        """
+        self.base_url: str = base_url
         self.parts: list[FixEndpointSection | MutableEndpointSection] = []
         self.template: str = ""
         self.last_prior = 0
 
     def add_fix_part(self, value: str | list[str], prior: int | None = 0):
+        """
+        The method adds a fixed section to the endpoint.
+
+        Args:
+            value (str): line with the name of the endpoint.
+            prior (int | None, optional): the position occupied by this part of the endpoint in the extended part of the request link to the resource. Defaults to 0.
+        """
         if not prior:
             prior = self.last_prior
         self.parts.append(FixEndpointSection(value, prior))
         self.last_prior += 1
 
     def add_mutable_parts(self, value: list[str], prior: int | None = 0):
+        """
+        The method adds a mutable section to the endpoint.
+
+        Args:
+            value (str): line with the name of the endpoint.
+            prior (int | None, optional): the position occupied by this part of the endpoint in the extended part of the request link to the resource. Defaults to 0.
+        """
         if not prior:
             prior = self.last_prior
         self.parts.append(MutableEndpointSection(value, prior))
         self.last_prior += 1
 
     def get_extended_base(self) -> Generator[str, Any, None]:
+        """
+        The method returns a url, which is an extended endpoint part of the base url.
+
+        Yields:
+            Generator: Link generator with endpoint part.
+        """
         if not self.template:
             self.parts.sort(key=lambda x: x.prior)
             temp_details = [
@@ -127,13 +206,12 @@ class ApiRequest(BaseResourceRequest):
     """
     API resource request class.
 
-    Args:
+    Attributes:
         name (str): request ID.
         endpoint (EndpointPath): the API endpoint that will be processed by this request.
-        fix_params (MutableMapping[str, str]): HTTP request parameters that do not change from request to request.
-        mutable_params (MutableMapping[str, MutableSequence]): HTTP request parameters that change from request to request.
-        io_context (IOContext): I/O context instance. Specifies the actions that need to be performed with the data obtained as a
-                                result of the request execution (in what format to deserialize, where to save, whether the information needs to be further processed, and so on).
+        fix_params (MutableMapping[str, str]): HTTP request parameters that do not change from request to request. Defaults to YassUndefined.
+        mutable_params (MutableMapping[str, MutableSequence]): HTTP request parameters that change from request to request. Defaults to YassUndefined.
+        io_context (IOContext): I/O context instance. Specifies the actions that need to be performed with the data obtained as a result of the request execution (in what format to deserialize, where to save, whether the information needs to be further processed, and so on).
         collect_interval (ActionCondition, optional): request activity interval. See ActionCondition for details. Defaults to AlwaysRun().
         has_pages (bool, optional): if True, then the class will try to crawl the resource with the request parameters specified in the next generated url, page by page. Defaults to True.
     """
@@ -149,12 +227,23 @@ class ApiRequest(BaseResourceRequest):
         | Undefined = YassUndefined,
         has_pages: bool = True,
     ) -> None:
+        """
+        Args:
+            name (str): request ID.
+            endpoint (EndpointPath): the API endpoint that will be processed by this request.
+            io_context (IOContext): I/O context instance. Specifies the actions that need to be performed with the data obtained as a
+                                    result of the request execution (in what format to deserialize, where to save, whether the information needs to be further processed, and so on).
+            collect_interval (ActionCondition, optional): request activity interval. See ActionCondition for details. Defaults to AlwaysRun().
+            fix_params (MutableMapping[str, str]): HTTP request parameters that do not change from request to request. Defaults to YassUndefined.
+            mutable_params (MutableMapping[str, MutableSequence]): HTTP request parameters that change from request to request. Defaults to YassUndefined.
+            has_pages (bool, optional): if True, then the class will try to crawl the resource with the request parameters specified in the next generated url, page by page. Defaults to True.
+        """
         super().__init__(name, io_context, collect_interval, has_pages)
         self.endpoint: EndpointPath = endpoint
-        self.fix_params: MutableMapping[str, str] = fix_params
-        self.mutable_params: MutableMapping[str, MutableSequence] = (
-            mutable_params
-        )
+        self.fix_params: MutableMapping[str, str] | Undefined = fix_params
+        self.mutable_params: (
+            MutableMapping[str, MutableSequence] | Undefined
+        ) = mutable_params
 
     def get_io_context(self) -> IOContext:
         return self.io_context
@@ -285,7 +374,20 @@ class ApiRequest(BaseResourceRequest):
 
 
 class SimpleEORTrigger(ApiEORTrigger):
+    """
+    A trigger that limits the time spent working with a resource by the number of processed links.
+
+    Attributes:
+        max_rounds (int): maximum number of links to process.
+        current_rounds (int): number of links processed.
+        search_type (str): search area (content or headings), in fact an implicit trigger type.
+    """
+
     def __init__(self, max_rounds: int):
+        """
+        Args:
+            max_rounds (int): maximum number of links to process.
+        """
         self.max_rounds: int = max_rounds
         self.current_rounds: int = 0
         self.search_type = "headers"
@@ -300,10 +402,10 @@ class MaxPageEORTrigger(ApiEORTrigger):
     A trigger that looks for the maximum page attribute in the content or headers.
     The current page attribute is also looked up for matching.
 
-    Args:
-        search_area (Literal["content", "headers"]): the place where attributes are searched.
-        current_page_field (str): attribute name with the value of the current page.
-        max_page_field (str): the name of the attribute with the maximum page value.
+    Attributes:
+        fields (tuple[str, str]): a tuple containing the current and maximum page values.
+        search_type (Literal["content", "headers"]): search area (content or headings), in fact an implicit trigger type.
+        content_handler (Callable): a custom function that is used to extract the required fields from the content. By default, this is a lambda that returns the content as is.
     """
 
     def __init__(
@@ -313,13 +415,19 @@ class MaxPageEORTrigger(ApiEORTrigger):
         current_page_field: str,
         max_page_field: str,
     ):
+        """
+        Args:
+            search_area (Literal["content", "headers"]): alias for search_type. In this class, it acts as a method resolver,
+                    since the search for the required fields can be carried out in different areas of the response to the request.
+            current_page_field (str): attribute name with the value of the current page.
+            max_page_field (str): the name of the attribute with the maximum page value.
+        """
         self.fields: tuple[str, str] = (current_page_field, max_page_field)
-        self.search_area: str = search_area
         self.content_handler: Callable = lambda x: x
         self.search_type = search_area
 
     def is_end_of_resource(self, response: ClientResponse | bytes) -> bool:
-        if self.search_area == "headers":
+        if self.search_type == "headers":
             response = cast(ClientResponse, response)
             return self._handle_headers(response)
         else:
@@ -349,12 +457,17 @@ class StatusEORTrigger(ApiEORTrigger):
     For example, the API may continue to accept requests, but return a 204 response code.
     The specified code can act as a control value for this trigger.
 
-    Args:
-        status_code (int): response control code.
+    Attributes:
+        status_code (int): response control http code.
+        search_type (Literal["content", "headers"]): search area (content or headings), in fact an implicit trigger type.
     """
 
     def __init__(self, status_code: int):
-        self.stop_status = status_code
+        """
+        Args:
+            status_code (int): response control http code.
+        """
+        self.stop_status: int = status_code
         self.search_type = "headers"
 
     def is_end_of_resource(self, response: ClientResponse) -> bool:
@@ -367,12 +480,18 @@ class ContentLengthEORTrigger(ApiEORTrigger):
     A trigger that terminates interaction with a resource based on the length of the content.
     Not only zero length, but also any other value can act as a control value.
 
-    Args:
-        min_content_length (int): Minimum content length in bytes. Used as a threshold - all values
+    Attributes:
+        min_content_length (int): minimum content length in bytes. Used as a threshold - all values
                                 equal to or below min_content_length cause the trigger to fire.
+        search_type (Literal["content", "headers"]): search area (content or headings), in fact an implicit trigger type.
     """
 
     def __init__(self, min_content_length: int):
+        """
+        Args:
+            min_content_length (int): minimum content length in bytes. Used as a threshold - all values
+                                    equal to or below min_content_length cause the trigger to fire.
+        """
         self.stop_value = min_content_length
         self.search_type = "headers"
 
@@ -388,16 +507,22 @@ class BatchCounter:
     between running data collectors in order not to overload the resource with requests. Operations to
     change the limit counter occur atomically.
 
-    Args:
-        resource (ApiResource): resource for which the limit counter will be created.
+    Attributes:
+        barrier (int): the remainder of the resource request limit.
+        active_tasks (int): number of active date collectors. Used to redistribute the limit. number of active date collectors. Used to distribute the request limit.
+
     """
 
     def __init__(self, resource: ApiResource):
+        """
+        Args:
+            resource (ApiResource): resource for which the limit counter will be created.
+        """
         self.barrier: int = resource.max_batch
         self._max_batch: int = resource.max_batch
         self.active_tasks: int = 0
-        self.count_lock = Lock()
-        self.zero_control = Event()
+        self._count_lock = Lock()
+        self._zero_control = Event()
 
     @property
     def min_batch(self) -> tuple[int, int]:
@@ -429,16 +554,16 @@ class BatchCounter:
             f"Количество активных задач на текущий момент {self.active_tasks}."
         )
         # async with self.count_lock:
-        async with self.count_lock:
+        async with self._count_lock:
             print("Ожидаю освобождения блокировок.")
             if self.barrier < min(self.min_batch):
-                await self.zero_control.wait()
+                await self._zero_control.wait()
             print("Блокировки захвачены.")
             acquire_size: int = max(self.barrier, *self.min_batch)
             print(f"Захваченный лимит составляет {acquire_size}.")
             self.barrier = self.barrier - acquire_size
             print(f"Доступный лимит составляет {self.barrier}.")
-        self.zero_control.clear()
+        self._zero_control.clear()
         return acquire_size
 
     def release_batch(self, current_size: int) -> None:
@@ -468,7 +593,7 @@ class BatchCounter:
         Returns:
             int: updated available limit.
         """
-        if not self.count_lock.locked() and self.barrier >= 0:
+        if not self._count_lock.locked() and self.barrier >= 0:
             new_batch: int = current_size + self.barrier
             self.barrier = 0
         else:
@@ -478,7 +603,7 @@ class BatchCounter:
                     f"Пересчет размера батча. Текущий размер составляет {current_size}, избыток захваченных батчей составляет {standart_batch}."
                 )
                 self.barrier += standart_batch
-                self.zero_control.set()
+                self._zero_control.set()
             else:
                 new_batch = current_size
         return new_batch
@@ -494,10 +619,10 @@ class ApiResource(BaseResource):
     """
     Class - access point to the API resource.
 
-    Args:
+    Attributes:
         url (str): api start url.
         extra_headers (dict, optional): additional headers. For example, these could be headers required for authorization in the API. Defaults to {}.
-        eor_triggers (list[ApiEORTrigger], optional): a list of triggers for notifying about the end of a resource. Defaults to [_EMPTY_EOR_TRIGGER].
+        eor_triggers (list[ApiEORTrigger], optional): a list of triggers for notifying about the end of a resource. Defaults to YassUndefined.
         max_batch (int, optional): the maximum number of requests to a resource. Most often, you can use the rate limit value of the api service for this parameter. Defaults to 1.
         delay (int | float, optional): delay before sending the next batch of requests. Defaults to 1.
         request_timeout (int | float, optional): the maximum waiting time for a response to a request. Applies to every single http request. Defaults to 5.
@@ -513,6 +638,15 @@ class ApiResource(BaseResource):
         delay: int | float = 1,
         request_timeout: int | float = 5,
     ):
+        """
+        Args:
+            url (str): api start url.
+            extra_headers (dict, optional): additional headers. For example, these could be headers required for authorization in the API. Defaults to {}.
+            eor_triggers (list[ApiEORTrigger] | Undefined, optional): a list of triggers for notifying about the end of a resource. Defaults to YassUndefined.
+            max_batch (int, optional): the maximum number of requests to a resource. Most often, you can use the rate limit value of the api service for this parameter. Defaults to 1.
+            delay (int | float, optional): delay before sending the next batch of requests. Defaults to 1.
+            request_timeout (int | float, optional): the maximum waiting time for a response to a request. Applies to every single http request. Defaults to 5.
+        """
         super().__init__(url, delay=delay, request_timeout=request_timeout)
         self.max_batch: int = max_batch
         self.endpoints: dict[str, EndpointPath] = {}

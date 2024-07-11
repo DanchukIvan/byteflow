@@ -37,7 +37,7 @@ class DailyInterval:
     """
     Helper class for checking daily time intervals. Used in the TimeCondition class.
 
-    Args:
+    Attributes:
         day_interval (int): activity interval, in days. If you want the arrival of
                             the required time to be checked every day, you need to
                             specify 1 in this parameter; to check the condition every
@@ -46,7 +46,7 @@ class DailyInterval:
                         allows you to recognize the time, for example, “10:00”, “10.00”, “10-00” and so on.
         end_time (str): end of the check time interval. It is assumed that after this time threshold is overcome,
                         the starting point will shift to the next calendar interval.
-        launch (datetime | str | None, optional): The starting point for checking the time interval as
+        launch (datetime | str | None, optional): the starting point for checking the time interval as
                         a recognizable date or date and time (for example, "10/20/2024 10:00"). If not specified,
                         the start of waiting for the required time starts immediately. If you need to delay
                         the occurrence of a control event, you need to specify a future date. If an urgent
@@ -60,6 +60,22 @@ class DailyInterval:
         end_time: str,
         launch: datetime | str | None = None,
     ):
+        """
+        Argss:
+            day_interval (int): activity interval, in days. If you want the arrival of
+                                the required time to be checked every day, you need to
+                                specify 1 in this parameter; to check the condition every
+                                two days 2 and so on.
+            start_time (str): start of the check time interval. Indicated in a form that
+                            allows you to recognize the time, for example, “10:00”, “10.00”, “10-00” and so on.
+            end_time (str): end of the check time interval. It is assumed that after this time threshold is overcome,
+                            the starting point will shift to the next calendar interval.
+            launch (datetime | str | None, optional): the starting point for checking the time interval as
+                            a recognizable date or date and time (for example, "10/20/2024 10:00"). If not specified,
+                            the start of waiting for the required time starts immediately. If you need to delay
+                            the occurrence of a control event, you need to specify a future date. If an urgent
+                            start of data collection is required, then a past date must be specified. Defaults to None.
+        """
         self._interval: int = day_interval
         self.start: time = dateparser.parse(start_time).time()  # type:ignore
         self.end: time = dateparser.parse(end_time).time()  # type: ignore
@@ -142,7 +158,7 @@ class WeekdayInterval:
                             allows you to recognize the time, for example, “10:00”, “10.00”, “10-00” and so on.
             end_time (str): end of the check time interval. It is assumed that after this time threshold is overcome,
                             the starting point will shift to the next calendar interval.
-            launch (datetime | str | None, optional): The starting point for checking the time interval as
+            launch (datetime | str | None, optional): the starting point for checking the time interval as
                         a recognizable date or date and time (for example, "10/20/2024 10:00"). If not specified,
                         the start of waiting for the required time starts immediately. If you need to delay
                         the occurrence of a control event, you need to specify a future date. If an urgent
@@ -216,6 +232,10 @@ class TimeCondition(ActionCondition):
     """
     A class that implements a timer function. Its functionality is similar to a standard asynchronous
     lock or event, except that its release depends on time.
+    
+    Attributes:
+        frequency (int | float): start time shift interval.
+        schedule_interval (DailyInterval | WeekdayInterval): activity interval controller..
 
     Args:
         period (int | WeekDaysType): activity interval in days or days of the week.
@@ -224,7 +244,7 @@ class TimeCondition(ActionCondition):
         end_time (str): end of the check time interval. It is assumed that after this time threshold is overcome,
                         the starting point will shift to the next calendar interval.
         frequency (int | float): start time shift interval.
-        launch_date (datetime | str | None, optional): The starting point for checking the time interval as
+        launch_date (datetime | str | None, optional): the starting point for checking the time interval as
                         a recognizable date or date and time (for example, "10/20/2024 10:00"). If not specified,
                         the start of waiting for the required time starts immediately. If you need to delay
                         the occurrence of a control event, you need to specify a future date. If an urgent

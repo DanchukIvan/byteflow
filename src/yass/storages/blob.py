@@ -130,8 +130,8 @@ class FsBlobStorage(BaseBufferableStorage):
     types and values ​​that are valid for a particular FS implementation (s3fs, local fs, etc.). For the class to work
     correctly, you must use exclusively asynchronous FS implementations.
 
-    Args:
-        engine (_FSSpecEngine): the engine used to access the repository. In this case, the engine is understood as an initialized instance of the AsyncFileSystem class. Defaults to _EMPTY_FSSPEC.
+    Attributes:
+        engine (_FSSpecEngine): the engine used to access the repository. In this case, the engine is understood as an initialized instance of the AsyncFileSystem class. Defaults to YassUndefined.
         handshake_timeout (int): timeout for establishing a connection with the backend. Defaults to 10.
         bufferize (bool): data buffering indicator. If False, all data will be constantly merged into the backend without buffering. Defaults to True.
         limit_type (Literal["none", "memory", "count", "time"]): type of data storage limit. Defaults to "none".
@@ -148,6 +148,14 @@ class FsBlobStorage(BaseBufferableStorage):
         limit_type: Literal["none", "memory", "count", "time"] = "none",
         limit_capacity: int | float = 10,
     ):
+        """
+        Args:
+            engine (_FSSpecEngine): the engine used to access the repository. In this case, the engine is understood as an initialized instance of the AsyncFileSystem class. Defaults to _EMPTY_FSSPEC.
+            handshake_timeout (int): timeout for establishing a connection with the backend. Defaults to 10.
+            bufferize (bool): data buffering indicator. If False, all data will be constantly merged into the backend without buffering. Defaults to True.
+            limit_type (Literal["none", "memory", "count", "time"]): type of data storage limit. Defaults to "none".
+            limit_capacity (int | float): limit value of the limiting parameter. For memory limit means the volume in megabytes. Defaults to 10.
+        """
         super().__init__(
             engine,
             handshake_timeout=handshake_timeout,

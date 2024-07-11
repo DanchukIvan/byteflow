@@ -35,6 +35,10 @@ pip install yass
 > * yarl
 > * dateparser
 
+## **More information about the project**
+
+You can learn more about Yass in the [project documentation](https://danchukivan.github.io/yass/), including the API and Tutorial sections. Changes can be monitored in the Changelog section.
+
 ## **Project status**
 
 Yass is currently a deep alpha project with an unstable API and limited functionality. Its use in production is **strictly not recommended**.

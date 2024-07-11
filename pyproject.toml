@@ -1,22 +1,18 @@
 [build-system]
-requires = [
-    "hatchling",
-]
-build-backend = "hatchling.build"
+requires=["hatchling"]
+build-backend="hatchling.build"
 
 [project]
-name = "yass"
-description = "Yet Another Simple Scraper"
-requires-python = ">=3.11"
-authors = [
-    { name = "Danchuk Ivan", email = "ivan.s.danchuk@gmail.com" },
-    { name = "Ivan Danchuk", email = "ivan.s.danchuk@gmail.com" },
-    { name = "Your Name", email = "you@example.com" },
+name="yass"
+description="Yet Another Simple Scraper"
+requires-python=">=3.11"
+authors=[
+    {name="Danchuk Ivan", email="ivan.s.danchuk@gmail.com"},
+    {name="Ivan Danchuk", email="ivan.s.danchuk@gmail.com"},
+    {name="Your Name", email="you@example.com"},
 ]
-maintainers = [
-    { name = "Danchuk Ivan", email = "ivan.s.danchuk@gmail.com" },
-]
-keywords = [
+maintainers=[{name="Danchuk Ivan", email="ivan.s.danchuk@gmail.com"}]
+keywords=[
     "scraping",
     "web scraping",
     "asyncio",
@@ -24,7 +20,7 @@ keywords = [
     "api crawler",
     "api scraping",
 ]
-classifiers = [
+classifiers=[
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: Microsoft",
@@ -32,8 +28,8 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
     "Topic :: Software Development :: Libraries",
 ]
-version = "0.2.0a2"
-dependencies = [
+version="0.2.1a1"
+dependencies=[
     "aiohttp<4.0.0,>=3.9.3",
     "aioitertools<1.0.0,>=0.11.0",
     "asyncio",
@@ -44,22 +40,19 @@ dependencies = [
     "yarl<2.0.0,>=1.9.4",
     "dateparser>=1.2.0",
 ]
-readme = "README.md"
+readme="README.md"
 
 [project.license]
-text = "Apache 2.0"
+text="Apache 2.0"
 
 [project.optional-dependencies]
-log = [
-    "loguru>=0.7.2",
-    "loguru-config>=0.1.0",
-]
+log=["loguru>=0.7.2", "loguru-config>=0.1.0"]
 
 [tool.pdm]
-distribution = true
+distribution=true
 
 [tool.pdm.dev-dependencies]
-dev_tools = [
+dev_tools=[
     "s3fs<2024.0.0,>=2023.12.2",
     "openpyxl<4.0.0,>=3.1.2",
     "pandas[pyarrow]>=2.2.0",
@@ -67,10 +60,8 @@ dev_tools = [
     "morefs[asynclocal]<1.0.0,>=0.1.2",
     "orjson>=3.10.0",
 ]
-hook = [
-    "pre-commit<4.0.0,>=3.6.0",
-]
-doc = [
+hook=["pre-commit<4.0.0,>=3.6.0"]
+doc=[
     "mkdocs-material>=9.5.27",
     "mkdocstrings[python]>=0.24.0",
     "mkdocs-autorefs>=1.0.1",
@@ -83,7 +74,8 @@ doc = [
     "markdown-version-annotations>=1.0.1",
     "git-cliff>=2.3.0",
     "mike>=2.1.2",
+    "black>=24.4.2",
 ]
 
 [tool.pdm.build]
-includes = []
+includes=[]

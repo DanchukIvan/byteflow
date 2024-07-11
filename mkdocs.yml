@@ -5,6 +5,7 @@ strict: true
 repo_name: yass
 repo_url: https://github.com/DanchukIvan/yass
 edit_uri: ""
+site_url: "https://danchukivan.github.io/yass/"
 
 theme:
   name: "material"
@@ -34,6 +35,7 @@ plugins:
       default_handler: python
       handlers:
         python:
+          paths: [src]
           options:
             show_root_toc_entry: false
             show_symbol_type_heading: true
@@ -41,6 +43,14 @@ plugins:
             show_docstring_modules: true
             merge_init_into_class: true
             show_signature_annotations: true
+            show_symbol_type_toc: true
+            members_order: source
+            separate_signature: true
+            signature_crossrefs: true
+            inherited_members: true
+  - mkdocs-simple-hooks:
+      hooks:
+        on_pre_build: "docs.plugins.scripts:copy_changelog"
   - mike:
       alias_type: symlink
       canonical_version: latest
@@ -106,3 +116,4 @@ nav:
           - Base: api/base_storages.md
           - Implementations: api/blob_storage.md
       - Miscellaneous utilities: api/misc_utils.md
+  - Changelog: CHANGELOG.md

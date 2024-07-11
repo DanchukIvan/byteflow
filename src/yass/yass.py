@@ -38,7 +38,7 @@ class EntryPoint:
         lookup_interval (int): the interval in seconds at which task completion is checked.
         registred_resources (list): list of registered resources. Resources store data about requests, for each of which a
                                     data collector is created.
-        debug_mode (bool): Debug mode indicator. Default is False.
+        debug_mode (bool): debug mode indicator. Default is False.
     """
 
     def define_resource(
@@ -141,7 +141,7 @@ class EntryPoint:
         At the moment, data collectors are being created only for API resources.
 
         Returns:
-            list[BaseDataCollector]: list of data collectors.
+            list (BaseDataCollector): list of data collectors.
         """
         collectors: list[BaseDataCollector] = list()
         for resource in self.registred_resources:

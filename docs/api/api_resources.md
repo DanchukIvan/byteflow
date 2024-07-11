@@ -25,3 +25,7 @@
       - ContentLengthEORTrigger
       - MaxPageEORTrigger
       - StatusEORTrigger
+      - SimpleEORTrigger
+      - EndpointPath
+      - FixEndpointSection
+      - MutableEndpointSection

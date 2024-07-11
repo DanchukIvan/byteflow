@@ -46,9 +46,9 @@ def reg_input(
     Registers a data deserialization function.
 
     Args:
-        extension (str): The data format for which the function is intended (for example, json, csv, etc.).
-        func (Callable): Function for deserializing data.
-        extra_args (dict[str, Any], optional): Values of function arguments that need to be bound instead of the default ones. Defaults to {}.
+        extension (str): the data format for which the function is intended (for example, json, csv, etc.).
+        func (Callable): function for deserializing data.
+        extra_args (dict[str, Any], optional): values of function arguments that need to be bound instead of the default ones. Defaults to {}.
 
     Raises:
         RuntimeError: thrown if the function fails validation. The error message indicates which part of the function is invalid.
@@ -69,12 +69,12 @@ def reg_output(
     Registers a data serialization function.
 
     Args:
-        extension (str): The data format for which the function is intended (for example, json, csv, etc.).
-        func (Callable): Function for deserializing data.
-        extra_args (dict[str, Any], optional): Values of function arguments that need to be bound instead of the default ones. Defaults to {}.
+        extension (str): the data format for which the function is intended (for example, json, csv, etc.).
+        func (Callable): function for deserializing data.
+        extra_args (dict[str, Any], optional): values of function arguments that need to be bound instead of the default ones. Defaults to {}.
 
     Raises:
-        RuntimeError: Thrown if the function fails validation. The error message indicates which part of the function is invalid.
+        RuntimeError: thrown if the function fails validation. The error message indicates which part of the function is invalid.
     """
     if check_output_sig(func):
         func = update_sign(func, extra_args) if extra_args else func
@@ -92,9 +92,9 @@ def deserialize(
     Deserializes byte content into an object of the specified format.
 
     Args:
-        content (bytes): Content received in byte representation.
-        format (str): The format of the data that the resource provides.
-        extra_args (dict[str, Any], optional): Values of function arguments that need to be bound instead of the default ones. Defaults to {}.
+        content (bytes): content received in byte representation.
+        format (str): the format of the data that the resource provides.
+        extra_args (dict[str, Any], optional): values of function arguments that need to be bound instead of the default ones. Defaults to {}.
 
     Raises:
         KeyError: thrown if there is no registered function of the given format.
@@ -116,13 +116,13 @@ def serialize(
     Args:
         dataobj (object): data object of any type (for example, pandas df, polars df, dict from json, etc.).
         format (str): the target data format in which the object should be written. The required format is determined by the user.
-        extra_args (dict[str, Any], optional): Values of function arguments that need to be bound instead of the default ones. Defaults to {}.
+        extra_args (dict[str, Any], optional): values of function arguments that need to be bound instead of the default ones. Defaults to {}.
 
     Raises:
         KeyError: thrown if there is no registered function of the given format.
 
     Returns:
-        bytes: Byte representation of content.
+        bytes: byte representation of content.
     """
     byte_buf = BytesIO()
     func: Callable[[Any, IO, dict], Any] = OUTPUT_MAP[format]
@@ -143,10 +143,10 @@ def create_datatype(
     Registers a new data format and functions for processing content of the specified format.
 
     Args:
-        format_name (str): Target data format.
-        input_func (Callable): Function for deserializing data.
-        output_func (Callable): Function for serializing data.
-        extra_args_in (dict, optional): Values of deserializing function arguments that need to be bound instead of the default ones. Defaults to {}.
+        format_name (str): target data format.
+        input_func (Callable): function for deserializing data.
+        output_func (Callable): function for serializing data.
+        extra_args_in (dict, optional): values of deserializing function arguments that need to be bound instead of the default ones. Defaults to {}.
         extra_args_out (dict, optional): the same for the serialization function.. Defaults to {}.
 
     Raises:
@@ -172,7 +172,7 @@ def allowed_datatypes(*, display: bool = False) -> list[_DataTypeInfo]:
     Returns the currently registered and therefore available for processing data formats.
 
     Args:
-        display (bool, optional): Outputting a list of data formats to the console. Defaults to False.
+        display (bool, optional): outputting a list of data formats to the console. Defaults to False.
 
     Returns:
         list[_DataTypeInfo]: list of available data formats.
@@ -221,13 +221,13 @@ class PathSegment:
 
     Args:
         concatenator (str): literal through which parts of the segment will be combined.
-        segment_order (int): The position that the segment will occupy along the path.
+        segment_order (int): the position that the segment will occupy along the path.
         segment_parts (list[str | Callable]): parts of the segment. There can be both callables that will be called to format a string
                                                 (for example, functions from the datetime package), and standard strings. Defaults to [].
 
     Attributes:
         concatenator (str): literal through which parts of the segment will be combined.
-        segment_order (int): The position that the segment will occupy along the path.
+        segment_order (int): the position that the segment will occupy along the path.
         segment_parts (list[str | Callable]): parts of the segment. There can be both callables that will be called to format a string
                                                 (for example, functions from the datetime package), and standard strings.
     """
@@ -339,17 +339,17 @@ class IOBoundPipeline:
     Attributes:
         io_context (IOContext): an I/O context object to which the pipeline will be associated.
         functions (list[Callable]): list of registered functions. The order of the functions in the list directly indicates the order in which they are tried on.
-        on_error (Callable): Exception catching function. Can be used for specific exception handling. By default, it is a lambda function that returns
+        on_error (Callable): exception catching function. Can be used for specific exception handling. By default, it is a lambda function that returns
                             any object passed to it unchanged.
-        data_filter (Callable): A function for filtering content for invalid blocks. Registered via the appropriate method. By default, it is a lambda function
+        data_filter (Callable): a function for filtering content for invalid blocks. Registered via the appropriate method. By default, it is a lambda function
                             that returns any object passed to it unchanged.
 
     Args:
         io_context (IOContext): an I/O context object to which the pipeline will be associated.
         functions (list[Callable]): list of registered functions. The order of the functions in the list directly indicates the order in which they are tried on.
-        on_error (Callable): Exception catching function. Can be used for specific exception handling. By default, it is a lambda function that returns
+        on_error (Callable): exception catching function. Can be used for specific exception handling. By default, it is a lambda function that returns
                             any object passed to it unchanged.
-        data_filter (Callable): A function for filtering content for invalid blocks. Registered via the appropriate method. By default, it is a lambda function
+        data_filter (Callable): a function for filtering content for invalid blocks. Registered via the appropriate method. By default, it is a lambda function
                             that returns any object passed to it unchanged.
     """
 
@@ -365,9 +365,9 @@ class IOBoundPipeline:
         Method for registering a handler function.
 
         Args:
-            order (int): Position of the function in the pipeline. This argument ultimately determines the order in
+            order (int): position of the function in the pipeline. This argument ultimately determines the order in
                         which handlers are applied to the data.
-            extra_kwargs (dict[str, Any], optional): Additional handler function arguments. Under the hood, _update_sign is applied. Defaults to {}.
+            extra_kwargs (dict[str, Any], optional): additional handler function arguments. Under the hood, _update_sign is applied. Defaults to {}.
 
         Returns:
             Callable: function registered as a data handler without modification.

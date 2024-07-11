@@ -80,12 +80,17 @@ class TimeLimit(BaseLimit):
     """
     A limit class that controls how long data remains in the buffer.
 
-    Args:
+    Attributes:
         storage (BaseBufferableStorage): a storage facility whose status is monitored.
         capacity (int): time in seconds.
     """
 
     def __init__(self, storage: BaseBufferableStorage, capacity: int):
+        """
+        Args:
+            storage (BaseBufferableStorage): a storage facility whose status is monitored.
+            capacity (int): time in seconds.
+        """
         self.storage: BaseBufferableStorage = storage
         self.capacity = timedelta(seconds=capacity)
 
@@ -96,13 +101,19 @@ class TimeLimit(BaseLimit):
 
 @limit("memory")
 class MemoryLimit(BaseLimit):
+    """
+    A limit class that controls the amount of memory occupied by buffers.
+
+    Attributes:
+        storage (BaseBufferableStorage): a storage facility whose status is monitored.
+        capacity (int): time in seconds.
+    """
+
     def __init__(self, storage: BaseBufferableStorage, capacity: int | float):
         """
-        A limit class that controls the amount of memory occupied by buffers.
-
         Args:
             storage (BaseBufferableStorage): a storage facility whose status is monitored.
-            capacity (int | float): memory threshold in megabytes.
+            capacity (int): time in seconds.
         """
         self.storage: BaseBufferableStorage = storage
         self.capacity: int | float = capacity
@@ -116,10 +127,16 @@ class MemoryLimit(BaseLimit):
 
 @limit("count")
 class CountLimit(BaseLimit):
+    """
+    A limit class that controls the amount of objects occupied by buffers.
+
+    Attributes:
+        storage (BaseBufferableStorage): a storage facility whose status is monitored.
+        capacity (int): time in seconds.
+    """
+
     def __init__(self, storage: BaseBufferableStorage, capacity: int):
         """
-        A limit class that controls the number of objects in buffers.
-
         Args:
             storage (BaseBufferableStorage): a storage facility whose status is monitored.
             capacity (int): the limit on the number of objects in the buffer.
