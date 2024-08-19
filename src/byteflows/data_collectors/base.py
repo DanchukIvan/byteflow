@@ -10,21 +10,21 @@ from urllib.parse import urlparse
 
 from rich.pretty import pprint as rpp
 
-from yass.contentio import PathTemplate
-from yass.core import YassCore
-from yass.storages.base import BaseBufferableStorage
+from byteflows.contentio import PathTemplate
+from byteflows.core import ByteflowCore
+from byteflows.storages.base import BaseBufferableStorage
 
 if TYPE_CHECKING:
-    from yass.contentio import IOContext
-    from yass.contentio.contentio import IOBoundPipeline
-    from yass.resources import BaseResource, BaseResourceRequest
-    from yass.scheduling.base import ActionCondition
-    from yass.storages import ContentQueue
+    from byteflows.contentio import IOContext
+    from byteflows.contentio.contentio import IOBoundPipeline
+    from byteflows.resources import BaseResource, BaseResourceRequest
+    from byteflows.scheduling.base import ActionCondition
+    from byteflows.storages import ContentQueue
 
 __all__ = ["BaseDataCollector"]
 
 
-class BaseDataCollector(YassCore):
+class BaseDataCollector(ByteflowCore):
     """
     Base data collector class. Data collectors are objects that directly make a request to a resource,
     call the data handler pipeline, and send data to the store. Data collectors take into account the
@@ -60,9 +60,7 @@ class BaseDataCollector(YassCore):
         storage: BaseBufferableStorage = io_context.storage
         self.eor_status = False
         self._write_channel: ContentQueue = storage.create_buffer(query)
-        self.url_series: Callable[..., AsyncGenerator[str, None]] = (
-            query.gen_url
-        )
+        self.url_series: Callable[..., AsyncGenerator[str]] = query.gen_url
         self.pipeline: IOBoundPipeline = io_context.pipeline
         self.input_format: str = io_context.in_format
         self.output_format: str = io_context.out_format

@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING, Any, Literal, Self, cast, overload
 
 from aioitertools.itertools import product as async_product
 
-from yass.core import Undefined, YassUndefined, reg_type
-from yass.resources.base import (
+from byteflows.core import SfnUndefined, Undefined, reg_type
+from byteflows.resources.base import (
     ApiEORTrigger,
     BaseResource,
     BaseResourceRequest,
@@ -40,8 +40,8 @@ __all__ = [
 if TYPE_CHECKING:
     from aiohttp import ClientResponse
 
-    from yass.contentio import IOContext
-    from yass.scheduling import ActionCondition, AlwaysRun
+    from byteflows.contentio import IOContext
+    from byteflows.scheduling import ActionCondition, AlwaysRun
 
 
 class FixEndpointSection:
@@ -209,8 +209,8 @@ class ApiRequest(BaseResourceRequest):
     Attributes:
         name (str): request ID.
         endpoint (EndpointPath): the API endpoint that will be processed by this request.
-        fix_params (MutableMapping[str, str]): HTTP request parameters that do not change from request to request. Defaults to YassUndefined.
-        mutable_params (MutableMapping[str, MutableSequence]): HTTP request parameters that change from request to request. Defaults to YassUndefined.
+        fix_params (MutableMapping[str, str]): HTTP request parameters that do not change from request to request. Defaults to SfnUndefined.
+        mutable_params (MutableMapping[str, MutableSequence]): HTTP request parameters that change from request to request. Defaults to SfnUndefined.
         io_context (IOContext): I/O context instance. Specifies the actions that need to be performed with the data obtained as a result of the request execution (in what format to deserialize, where to save, whether the information needs to be further processed, and so on).
         collect_interval (ActionCondition, optional): request activity interval. See ActionCondition for details. Defaults to AlwaysRun().
         has_pages (bool, optional): if True, then the class will try to crawl the resource with the request parameters specified in the next generated url, page by page. Defaults to True.
@@ -222,9 +222,9 @@ class ApiRequest(BaseResourceRequest):
         endpoint: EndpointPath,
         io_context: IOContext,
         collect_interval: ActionCondition = AlwaysRun(),
-        fix_params: MutableMapping[str, str] | Undefined = YassUndefined,
+        fix_params: MutableMapping[str, str] | Undefined = SfnUndefined,
         mutable_params: MutableMapping[str, MutableSequence]
-        | Undefined = YassUndefined,
+        | Undefined = SfnUndefined,
         has_pages: bool = True,
     ) -> None:
         """
@@ -234,8 +234,8 @@ class ApiRequest(BaseResourceRequest):
             io_context (IOContext): I/O context instance. Specifies the actions that need to be performed with the data obtained as a
                                     result of the request execution (in what format to deserialize, where to save, whether the information needs to be further processed, and so on).
             collect_interval (ActionCondition, optional): request activity interval. See ActionCondition for details. Defaults to AlwaysRun().
-            fix_params (MutableMapping[str, str]): HTTP request parameters that do not change from request to request. Defaults to YassUndefined.
-            mutable_params (MutableMapping[str, MutableSequence]): HTTP request parameters that change from request to request. Defaults to YassUndefined.
+            fix_params (MutableMapping[str, str]): HTTP request parameters that do not change from request to request. Defaults to SfnUndefined.
+            mutable_params (MutableMapping[str, MutableSequence]): HTTP request parameters that change from request to request. Defaults to SfnUndefined.
             has_pages (bool, optional): if True, then the class will try to crawl the resource with the request parameters specified in the next generated url, page by page. Defaults to True.
         """
         super().__init__(name, io_context, collect_interval, has_pages)
@@ -310,7 +310,7 @@ class ApiRequest(BaseResourceRequest):
         )
         return iterator
 
-    async def _build_mf_string(self) -> AsyncGenerator[str, None]:
+    async def _build_mf_string(self) -> AsyncGenerator[str]:
         """
         The method creates an asynchronous generator that generates a part of the url with variable request parameters.
 
@@ -622,7 +622,7 @@ class ApiResource(BaseResource):
     Attributes:
         url (str): api start url.
         extra_headers (dict, optional): additional headers. For example, these could be headers required for authorization in the API. Defaults to {}.
-        eor_triggers (list[ApiEORTrigger], optional): a list of triggers for notifying about the end of a resource. Defaults to YassUndefined.
+        eor_triggers (list[ApiEORTrigger], optional): a list of triggers for notifying about the end of a resource. Defaults to SfnUndefined.
         max_batch (int, optional): the maximum number of requests to a resource. Most often, you can use the rate limit value of the api service for this parameter. Defaults to 1.
         delay (int | float, optional): delay before sending the next batch of requests. Defaults to 1.
         request_timeout (int | float, optional): the maximum waiting time for a response to a request. Applies to every single http request. Defaults to 5.
@@ -633,7 +633,7 @@ class ApiResource(BaseResource):
         url: str,
         *,
         extra_headers: dict = {},
-        eor_triggers: list[ApiEORTrigger] | Undefined = YassUndefined,
+        eor_triggers: list[ApiEORTrigger] | Undefined = SfnUndefined,
         max_batch: int = 1,
         delay: int | float = 1,
         request_timeout: int | float = 5,
@@ -642,7 +642,7 @@ class ApiResource(BaseResource):
         Args:
             url (str): api start url.
             extra_headers (dict, optional): additional headers. For example, these could be headers required for authorization in the API. Defaults to {}.
-            eor_triggers (list[ApiEORTrigger] | Undefined, optional): a list of triggers for notifying about the end of a resource. Defaults to YassUndefined.
+            eor_triggers (list[ApiEORTrigger] | Undefined, optional): a list of triggers for notifying about the end of a resource. Defaults to SfnUndefined.
             max_batch (int, optional): the maximum number of requests to a resource. Most often, you can use the rate limit value of the api service for this parameter. Defaults to 1.
             delay (int | float, optional): delay before sending the next batch of requests. Defaults to 1.
             request_timeout (int | float, optional): the maximum waiting time for a response to a request. Applies to every single http request. Defaults to 5.
@@ -692,9 +692,9 @@ class ApiResource(BaseResource):
         collect_interval: ActionCondition = AlwaysRun(),
         has_pages: bool = True,
         replace: bool = False,
-        fix_params: MutableMapping[str, str] | Undefined = YassUndefined,
+        fix_params: MutableMapping[str, str] | Undefined = SfnUndefined,
         mutable_params: MutableMapping[str, MutableSequence]
-        | Undefined = YassUndefined,
+        | Undefined = SfnUndefined,
     ) -> ApiRequest:
         if name in self.queries and not replace:
             msg = "Запрос к ресурсу с таким именем уже существует. Если требуется заменить запрос, установите 'replace=True'."

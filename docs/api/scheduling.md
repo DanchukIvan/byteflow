@@ -4,7 +4,7 @@
 
 ## Core classes
 
-::: yass.scheduling.limits
+::: byteflows.scheduling.limits
     options:
       show_source: true
       group_by_category: false
@@ -14,7 +14,7 @@
         - TimeLimit
         - UnableBufferize
 
-::: yass.scheduling.timeinterval
+::: byteflows.scheduling.timeinterval
     options:
       show_source: true
       group_by_category: false
@@ -26,7 +26,7 @@
 
 ## Service classes and utilities
 
-::: yass.scheduling.limits
+::: byteflows.scheduling.limits
     options:
       show_source: true
       group_by_category: false
@@ -37,7 +37,7 @@
 
 ## Types, constants and enums
 
-::: yass.scheduling.timeinterval
+::: byteflows.scheduling.timeinterval
     options:
       show_source: true
       group_by_category: false

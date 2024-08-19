@@ -10,8 +10,8 @@ Declaring the necessary constants:
 
 ``` py
 from os import getenv
-from yass.resources.api import ApiResource, EndpointPath, SimpleEORTrigger
-from yass import EntryPoint
+from byteflows.resources.api import ApiResource, EndpointPath, SimpleEORTrigger
+from byteflows import EntryPoint
 
 API_KEY: str | None = getenv("FMP_API")
 API_URL = "https://financialmodelingprep.com/api/v3"
@@ -24,7 +24,7 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Ge
 Creating an entry point into the application and register the resource:
 
 ??? info "About example"
-    You can test Yass on a different API and with different parameters of all classes, not limited to what is presented in the Tutorial.
+    You can test Byteflows on a different API and with different parameters of all classes, not limited to what is presented in the Tutorial.
 
 ``` py
 app = EntryPoint()
@@ -50,7 +50,7 @@ At the moment, several trigger options are implemented for the resource API. Som
 
 In our example, we use a simple trigger that limits work with a resource by the number of requests to it. Moreover, we mean precisely the number of requests, and not the cycles of sending requests/receiving responses.
 
-Trigger classes do not store information about previous test results. Therefore, if there is some kind of global restriction on a resource, as in our case (limit of 250 requests per day), it needs to be implemented through the totality of all available Yass limiting objects (for example, start collecting data only once a day for the entire limit or split the total available amount requests by number of starts and requests).
+Trigger classes do not store information about previous test results. Therefore, if there is some kind of global restriction on a resource, as in our case (limit of 250 requests per day), it needs to be implemented through the totality of all available Byteflows limiting objects (for example, start collecting data only once a day for the entire limit or split the total available amount requests by number of starts and requests).
 
 For our example, we set a limit of 12 requests (1) per run.
 { .annotate }

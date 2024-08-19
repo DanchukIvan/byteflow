@@ -2,7 +2,7 @@
 
 ---
 
-::: yass.contentio
+::: byteflows.contentio
     options:
       show_source: true
       group_by_category: false

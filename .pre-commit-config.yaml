@@ -37,7 +37,7 @@ repos:
       - id: unexport
         args: ["--refactor"]
   - repo: https://github.com/asottile/pyupgrade
-    rev: v3.16.0
+    rev: v3.17.0
     hooks:
       - id: pyupgrade
         args:
@@ -50,19 +50,26 @@ repos:
             --py311-plus,
           ]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.5.0
+    rev: v0.6.1
     hooks:
       - id: ruff
         args: [--fix-only, --config=ruff.toml]
       - id: ruff-format
         args: [--config=ruff.toml]
   - repo: https://github.com/pdm-project/pdm
-    rev: 2.16.1
+    rev: 2.18.1
     hooks:
       - id: pdm-lock-check
       - id: pdm-sync
       - id: pdm-export
-        args: ["-o", "requirements.txt", "--without-hashes", "--pyproject"]
+        args:
+          [
+            "-o",
+            "requirements.txt",
+            "--without-hashes",
+            "--pyproject",
+            "--prod",
+          ]
         files: ^pdm.lock$
   - repo: https://github.com/jorisroovers/gitlint
     rev: v0.19.1

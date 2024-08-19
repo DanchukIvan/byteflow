@@ -1,19 +1,19 @@
-# **Yass Components**
+# **Byteflows Components**
 
 ---
 
-This page provides brief definitions of Yass components to provide a better understanding of exactly how Yass works under the hood.
+This page provides brief definitions of Byteflows components to provide a better understanding of exactly how Byteflows works under the hood.
 
-Although Yass is made up of many parts—main classes, service classes, utilities, and functions—only a few of them form the foundation of a working application.More detailed information about each component can be found in the [Tutorials](../about/tutorial/step_1.md) section or in the [API description](../api/about_section.md#api-section-start) of each module.
+Although Byteflows is made up of many parts—main classes, service classes, utilities, and functions—only a few of them form the foundation of a working application.More detailed information about each component can be found in the [Tutorials](../about/tutorial/step_1.md) section or in the [API description](../api/about_section.md#api-section-start) of each module.
 
 ## **Resources**
 
 Key component. A [resource](../api/api_resources.md#implementations) is nothing more than a data source located on the network. This could be a third-party API or an API owned by your organization, or simply a website that hosts the information you need.
 
 ??? warning "Stay ethical"
-    The Yass developer does not encourage or condone attempts to borrow information from a resource against the will of the resource owner. Therefore, if in the process of scraping data you encounter powerful resistance from the source, **I strongly recommend that you think about whether you are doing something that is acceptable to the owner of the resource and whether it is worth the potential damage for both parties**.
+    The Byteflows developer does not encourage or condone attempts to borrow information from a resource against the will of the resource owner. Therefore, if in the process of scraping data you encounter powerful resistance from the source, **I strongly recommend that you think about whether you are doing something that is acceptable to the owner of the resource and whether it is worth the potential damage for both parties**.
 !!! info "Functionality limitation"
-    Currently only working with the [API](../api/api_resources.md#working-with-api) is available. More uses of Yass will become available in the future.
+    Currently only working with the [API](../api/api_resources.md#working-with-api) is available. More uses of Byteflows will become available in the future.
 
 As a matter of fact, if you do not declare a Resource in the code, then no work will begin :) The resource, as a central entity, performs the following functions:
 
@@ -26,7 +26,7 @@ As a matter of fact, if you do not declare a Resource in the code, then no work 
 
 A lower level component that is directly involved in the information retrieval process. If we generalize the functionality of the [Request](../api/api_resources.md#implementations) classes, we can say that at the level of each specific request the following is determined:
 
-- how to generate links to send a network request, thereby defining the data source section that Yass will work with;
+- how to generate links to send a network request, thereby defining the data source section that Byteflows will work with;
 - what input data we expect to receive and in what format we plan to upload it;
 - where we want to store the data obtained as a result of the execution of this request;
 - whether additional processing of this request is needed.
@@ -44,23 +44,23 @@ Several entities are also associated with Requests (I/O context, pipelines), whi
 The data collector's work begins by waiting for the current time to be scheduled to work with the resource. Once the data collector has started, it repeats the 'wait-receive' loop endlessly until an unexpected error occurs or the user cancels the corresponding instance of the class (1).
 { .annotate }
 
-1. :material-wrench-clock-outline: There is currently no way to stop data collectors unless an unexpected error occurs. The first stable version of Yass will feature a cli interface that allows you to selectively stop the selected data collector.
+1. :material-wrench-clock-outline: There is currently no way to stop data collectors unless an unexpected error occurs. The first stable version of Byteflows will feature a cli interface that allows you to selectively stop the selected data collector.
 
 Typically, you won't have to instantiate data collectors yourself, since they are generated automatically by the application class when the application starts. However, in the future it is planned to add an interface with the ability to receive an instance of the created data collector.
 
 ## **Storages**
 
-The repository concludes the overview of Yass core components.
+The repository concludes the overview of Byteflows core components.
 
-The [storage](../api/blob_storage.md#implementations) ensures the transfer of data to the selected backend, and the backend can be anything - persistent storage or some kind of message broker, data processing platform. The main role of this entity is to summarize information about registered backends and provide unified interfaces for working with them. Inextricably linked with storage is the concept of an engine - this is the object through which Yass establishes a connection with the backend and transmits data. The essence of the engine is that it transfers a similar object well to SqlAlchemy.
+The [storage](../api/blob_storage.md#implementations) ensures the transfer of data to the selected backend, and the backend can be anything - persistent storage or some kind of message broker, data processing platform. The main role of this entity is to summarize information about registered backends and provide unified interfaces for working with them. Inextricably linked with storage is the concept of an engine - this is the object through which Byteflows establishes a connection with the backend and transmits data. The essence of the engine is that it transfers a similar object well to SqlAlchemy.
 
-In other words, Storage is an interface to storage deployed outside the Yass loop.
+In other words, Storage is an interface to storage deployed outside the Byteflows loop.
 
-Although this family of classes has public interfaces, you don't actually have to use them when using Yass - they are all baked into template methods of other classes involved in data scraping, and are applied "automatically". These interfaces can be useful if you plan to combine Yass with other solutions within your architecture.
+Although this family of classes has public interfaces, you don't actually have to use them when using Byteflows - they are all baked into template methods of other classes involved in data scraping, and are applied "automatically". These interfaces can be useful if you plan to combine Byteflows with other solutions within your architecture.
 
 ## **What's next?**
 
-Once you are familiar with the key components, it is best to study the Study Guide. It clearly shows the process of preparing an application to work with the **[Financialmodelingprep API](https://site.financialmodelingprep.com/)**. Thanks to them for the opportunity to provide a more meaningful example to Yass users[^1]!
+Once you are familiar with the key components, it is best to study the Study Guide. It clearly shows the process of preparing an application to work with the **[Financialmodelingprep API](https://site.financialmodelingprep.com/)**. Thanks to them for the opportunity to provide a more meaningful example to Byteflows users[^1]!
 
 !!! info "Something else about working with FMP"
     FMP also has its own SDK for working with their API. In case you are interested in working with this resource, it is [here](https://pypi.org/project/fmpsdk/).

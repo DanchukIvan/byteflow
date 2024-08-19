@@ -1,11 +1,11 @@
 from abc import abstractmethod
 
-from yass.core import YassCore
+from byteflows.core import ByteflowCore
 
 __all__ = ["ActionCondition", "BaseLimit"]
 
 
-class ActionCondition(YassCore):
+class ActionCondition(ByteflowCore):
     """
     The base class for all subclasses that control the frequency of data collection. Subclasses of the ActionCondition
     class define a control event that causes requests to be sent to a physical resource by data collectors. Currently
@@ -31,7 +31,7 @@ class ActionCondition(YassCore):
         ...
 
 
-class BaseLimit(YassCore):
+class BaseLimit(ByteflowCore):
     """
     Limit classes are a special type of scheduler intended exclusively for use in storage classes.
     Limits analyze the specified storage indicators and signal when a specified threshold is exceeded

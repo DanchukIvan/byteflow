@@ -10,10 +10,10 @@ from fsspec import available_protocols, get_filesystem_class
 from fsspec.asyn import AsyncFileSystem
 from rich.pretty import pprint as rpp
 
-from yass.contentio import deserialize, serialize
-from yass.core import Undefined, YassUndefined, reg_type
-from yass.storages import BaseBufferableStorage, engine_factory
-from yass.storages.base import ContentQueue
+from byteflows.contentio import deserialize, serialize
+from byteflows.core import SfnUndefined, Undefined, reg_type
+from byteflows.storages import BaseBufferableStorage, engine_factory
+from byteflows.storages.base import ContentQueue
 
 __all__ = [
     "FsBlobStorage",
@@ -131,7 +131,7 @@ class FsBlobStorage(BaseBufferableStorage):
     correctly, you must use exclusively asynchronous FS implementations.
 
     Attributes:
-        engine (_FSSpecEngine): the engine used to access the repository. In this case, the engine is understood as an initialized instance of the AsyncFileSystem class. Defaults to YassUndefined.
+        engine (_FSSpecEngine): the engine used to access the repository. In this case, the engine is understood as an initialized instance of the AsyncFileSystem class. Defaults to SfnUndefined.
         handshake_timeout (int): timeout for establishing a connection with the backend. Defaults to 10.
         bufferize (bool): data buffering indicator. If False, all data will be constantly merged into the backend without buffering. Defaults to True.
         limit_type (Literal["none", "memory", "count", "time"]): type of data storage limit. Defaults to "none".
@@ -141,7 +141,7 @@ class FsBlobStorage(BaseBufferableStorage):
 
     def __init__(
         self,
-        engine: Undefined | _FSSpecEngine = YassUndefined,
+        engine: Undefined | _FSSpecEngine = SfnUndefined,
         *,
         handshake_timeout: int = 10,
         bufferize: bool = True,

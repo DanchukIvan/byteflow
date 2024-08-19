@@ -7,14 +7,14 @@ Since we are working with a resource to extract data, it would not hurt us to fo
 - where will we store them and whether we will store them at all;
 - will we somehow additionally process the data.
 
-And the answers to most of the questions are provided by the **contentio** module and the concept of I/O contexts. In the practical part, let’s not get into the details of the Yass architecture and let’s get down to business.
+And the answers to most of the questions are provided by the **contentio** module and the concept of I/O contexts. In the practical part, let’s not get into the details of the Byteflows architecture and let’s get down to business.
 
 ## **Registering data formats**
 
 To process any data, we need to define its format and handler functions, which we will do now. We know that the FMP API gives us data in json format. We will save the data in csv format.
 
 ``` py
-from yass import contentio
+from byteflows import contentio
 import polars as pl
 
 contentio.create_datatype(
@@ -34,9 +34,9 @@ contentio.create_datatype(
 Using the create_datatype module-level function, we declared two data types - csv and json - and also assigned handler functions to them using the wonderful Polars library. Thanks to Polars, we can seamlessly convert json data to csv, since both data types are schema-dependent and can be described in terms of a dataframe.
 
 !!! info "About data types and their handlers"
-    **The system of data types and their processing is the weakest part of the Yass API**. At the moment, it is necessary to explicitly declare types and handlers assigned to them, but this creates the risk of impossibility of converting structured and semi-structured data from one format to another, despite the fact that they are all schema-dependent and have explicit polymorphism, and also requires the introduction of adapter objects between all compatible data types.
+    **The system of data types and their processing is the weakest part of the Byteflows API**. At the moment, it is necessary to explicitly declare types and handlers assigned to them, but this creates the risk of impossibility of converting structured and semi-structured data from one format to another, despite the fact that they are all schema-dependent and have explicit polymorphism, and also requires the introduction of adapter objects between all compatible data types.
 
-    The most likely solution will be to create data type presets in Yass and use universal libraries like Polars for structured data and Pillow type for blob-like data. Subsequently, the user will not have to manage the composition of data types and their handlers, which will also relieve him of responsibility for the backward compatibility of handlers.
+    The most likely solution will be to create data type presets in Byteflows and use universal libraries like Polars for structured data and Pillow type for blob-like data. Subsequently, the user will not have to manage the composition of data types and their handlers, which will also relieve him of responsibility for the backward compatibility of handlers.
 
 ## **Registration of storage**
 
@@ -75,8 +75,8 @@ In this piece of code, we received the parameters we needed to initialize the st
 
 **The Limit Type** is nothing more than the key by which one or another Limit class is registered. These are special triggers that determine the moment of uploading data to the backend according to some criterion, for example, the number of elements in the data collector buffer, memory occupied by the data. Again, a factory is triggered under the hood, which, having detected the required implementation using the key, returns an object.
 
-??? note "About polymorphism in Yass"
-    At the moment, users cannot register their own limit types and storage engines; this is an internal Yass implementation detail and will most likely not be available in public in the future. If your practice has some special use case and the current capabilities of Yass are not enough, you can open an issue for its creation.
+??? note "About polymorphism in Byteflows"
+    At the moment, users cannot register their own limit types and storage engines; this is an internal Byteflows implementation detail and will most likely not be available in public in the future. If your practice has some special use case and the current capabilities of Byteflows are not enough, you can open an issue for its creation.
 
 ## **Creating context objects**
 
@@ -144,7 +144,7 @@ As you may have noticed, the number of elements in one segment is not limited an
 !!! note
     In theory, the order of segments can be fixed simply by adding segments in the desired order. However, if we first generate temporary keys, and then modify the path generator on the fly in the pipeline to obtain the final storage path, then the priority argument allows us to make such an operation much more flexible and faster using existing tools without writing additional logic.
 
-    This note applies to all Yass entities whose constructors and methods take as an argument a priority value or something similar to that value. Probably in future releases in some cases such arguments will be excluded or the functionality using these arguments will be changed.
+    This note applies to all Byteflows entities whose constructors and methods take as an argument a priority value or something similar to that value. Probably in future releases in some cases such arguments will be excluded or the functionality using these arguments will be changed.
 
 You can check which line will be rendered with the given parameters as follows:
 
@@ -156,12 +156,12 @@ i_pathgenerator.render_path()
 
 ### Charging pipelines
 
-Suppose among the information related to company income in the FMP API, we only need identifying fields, coefficients, and we also need to add our own custom indicator coefficient. And additionally, we will add the record creation date for each row. The tasks of data conversion and object modification are solving in Yass using pipelines.
+Suppose among the information related to company income in the FMP API, we only need identifying fields, coefficients, and we also need to add our own custom indicator coefficient. And additionally, we will add the record creation date for each row. The tasks of data conversion and object modification are solving in Byteflows using pipelines.
 
-The essence of how pipelines work is simple - it registers a handler function and applies it to incoming data, which is in serialized form before uploading to the backend. All handlers run in a separate thread and do not block the Yass execution thread.
+The essence of how pipelines work is simple - it registers a handler function and applies it to incoming data, which is in serialized form before uploading to the backend. All handlers run in a separate thread and do not block the Byteflows execution thread.
 
 ??? info "IO bound and CPU bound tasks"
-    Yass's asynchronous capabilities and Python's concurrency model are great for I/O and small CPU workloads. However, if you need to implement CPU-heavy processing of tasks, you should use a non-standard solution in your pipelines, which can be guaranteed to execute the task on a separate core without connection with the GIL. A large number of CPU tasks alone will significantly reduce the performance of Yass only due to the nature of Python working in a multiprocessor environment.
+    Byteflows's asynchronous capabilities and Python's concurrency model are great for I/O and small CPU workloads. However, if you need to implement CPU-heavy processing of tasks, you should use a non-standard solution in your pipelines, which can be guaranteed to execute the task on a separate core without connection with the GIL. A large number of CPU tasks alone will significantly reduce the performance of Byteflows only due to the nature of Python working in a multiprocessor environment.
 
 We implement everything previously said in simple code.
 
@@ -199,8 +199,8 @@ income_pipeline.show_pipeline()
 Our pipeline is ready. In pipelines we can carry out any operations, including compressing data into one object, completely changing the structure of a data object (for example, parsing a downloaded doc file, wrapping the necessary data in json and putting this json in the buffer instead of the original object), receiving additional data from other services and merge them with the original object. Everything is limited only by your imagination, needs and serialization capabilities of the functions and tools you use.
 
 ??? warning "Mmm, why are there steps here?"
-    Unfortunately, pipelines are also a weak part of the Yass API. There are several problems at once: this is access to global objects if you need to interact with them, and the risk of a large overproduction of threads, and there is no state storage. In the future, it is planned to eliminate these shortcomings, including the ability to save the state of the pipeline when errors occur and reload it from where it stopped in runtime.
+    Unfortunately, pipelines are also a weak part of the Byteflows API. There are several problems at once: this is access to global objects if you need to interact with them, and the risk of a large overproduction of threads, and there is no state storage. In the future, it is planned to eliminate these shortcomings, including the ability to save the state of the pipeline when errors occur and reload it from where it stopped in runtime.
 
-    This is part of a lot of work to come and after hammering away at the simpler components of Yass, the code and functionality of the pipelines will be polished. The step method is a tiny piece of the future API.
+    This is part of a lot of work to come and after hammering away at the simpler components of Byteflows, the code and functionality of the pipelines will be polished. The step method is a tiny piece of the future API.
 
 Now the final part remains. Let's get to it.

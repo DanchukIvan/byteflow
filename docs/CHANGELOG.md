@@ -1,8 +1,12 @@
-# **Changelog**
+# Changelog
+
+---
 
 All notable changes to this project will be documented in this file.
 
 ## **Unreleased**
+
+---
 
 ### <!-- 2 -->:page_with_curl: Documentation
 
@@ -14,12 +18,16 @@ All notable changes to this project will be documented in this file.
 
 ## **0.2.1a1 (2024-07-09)**
 
+---
+
 ### <!-- 0 -->:rocket: New features
 
 * Added ls_storage function
 * Added new classes and method
 
 ## **0.2.0a2 (2024-07-09)**
+
+---
 
 ### <!-- 2 -->:page_with_curl: Documentation
 
@@ -43,6 +51,8 @@ All notable changes to this project will be documented in this file.
 * Dependencies relinked
 
 ## **0.2.0a1 (2024-04-12)**
+
+---
 
 ### <!-- 0 -->:rocket: New features
 

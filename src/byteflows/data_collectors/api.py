@@ -12,14 +12,14 @@ from aiohttp import ClientResponse, ClientSession
 from aioitertools.more_itertools import take
 from rich.pretty import pprint as rpp
 
-from yass.contentio import deserialize
-from yass.core import YassUndefined, reg_type
-from yass.data_collectors.base import BaseDataCollector
+from byteflows.contentio import deserialize
+from byteflows.core import SfnUndefined, reg_type
+from byteflows.data_collectors.base import BaseDataCollector
 
 __all__ = ["ApiDataCollector", "EORTriggersResolver"]
 
 if TYPE_CHECKING:
-    from yass.resources import (
+    from byteflows.resources import (
         ApiEORTrigger,
         ApiRequest,
         ApiResource,
@@ -155,7 +155,7 @@ class ApiDataCollector(BaseDataCollector):
         rpp(
             f"Текущий размер батча {self.current_bs}. Минимальный размер батча {self.batcher.min_batch}."
         )
-        url_gen: AsyncGenerator[str, None] = self.url_series()
+        url_gen: AsyncGenerator[str] = self.url_series()
         while True:
             urls: list[str] = await take(self.current_bs, url_gen)
             rpp(f"Количество полученных ссылок {len(urls)}")
@@ -170,7 +170,7 @@ class ApiDataCollector(BaseDataCollector):
                         for raw_bytes in raw_content
                     ]
                 )
-                if self.pipeline is not YassUndefined:
+                if self.pipeline is not SfnUndefined:
                     async with self.pipeline.run_transform(
                         deser_content
                     ) as pipeline:

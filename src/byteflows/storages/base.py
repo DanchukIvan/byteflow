@@ -18,10 +18,10 @@ from weakref import WeakValueDictionary
 
 from rich.pretty import pprint as rpp
 
-from yass.contentio import serialize
-from yass.core import Undefined, YassCore, YassUndefined
-from yass.scheduling import UnableBufferize, setup_limit
-from yass.utils import scale_bytes
+from byteflows.contentio import serialize
+from byteflows.core import ByteflowCore, SfnUndefined, Undefined
+from byteflows.scheduling import UnableBufferize, setup_limit
+from byteflows.utils import scale_bytes
 
 __all__ = [
     "AnyDataobj",
@@ -34,9 +34,9 @@ __all__ = [
 ]
 
 if TYPE_CHECKING:
-    from yass.contentio import IOContext
-    from yass.resources.base import BaseResourceRequest
-    from yass.scheduling import BaseLimit
+    from byteflows.contentio import IOContext
+    from byteflows.resources.base import BaseResourceRequest
+    from byteflows.scheduling import BaseLimit
 
 
 class _SupportAsync(Awaitable, Protocol): ...
@@ -303,7 +303,7 @@ class BufferDispatcher:
         yield from self.get_buffers()
 
 
-class BaseBufferableStorage(YassCore):
+class BaseBufferableStorage(ByteflowCore):
     """
     The base class for all other classes implementing data saving operations and interaction with the storage backend.
     Storage classes are used as a portal to the backend itself. Anything can act as a backend - a message broker, network
@@ -314,7 +314,7 @@ class BaseBufferableStorage(YassCore):
 
     def __init__(
         self,
-        engine: Undefined | Any = YassUndefined,
+        engine: Undefined | Any = SfnUndefined,
         *,
         handshake_timeout: int = 10,
         bufferize: bool = False,

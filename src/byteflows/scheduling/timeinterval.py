@@ -7,8 +7,8 @@ from typing import Literal
 
 import dateparser
 
-from yass.core import reg_type
-from yass.scheduling import ActionCondition
+from byteflows.core import reg_type
+from byteflows.scheduling import ActionCondition
 
 __all__ = [
     "AllowedWeekDays",

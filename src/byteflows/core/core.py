@@ -8,10 +8,10 @@ from typing import Any, Protocol, TypeVar, runtime_checkable
 __all__ = [
     "AYC",
     "SingletonMixin",
-    "YassCore",
+    "ByteflowCore",
     "get_all_factories",
     "reg_type",
-    "YassUndefined",
+    "SfnUndefined",
     "Undefined",
 ]
 
@@ -38,12 +38,12 @@ class SingletonMixin:
             raise RuntimeError(msg) from None
 
 
-_AC = TypeVar("_AC", bound="YassCore")
+_AC = TypeVar("_AC", bound="ByteflowCore")
 AYC = TypeVar("AYC", covariant=True)
 
 
 @runtime_checkable
-class YassCore(Protocol):
+class ByteflowCore(Protocol):
     """
     The base class for all other classes.
 
@@ -101,10 +101,10 @@ def reg_type(name: str) -> Callable[[type[_AC]], type[_AC]]:
     def wrapped_subcls(_cls: type[_AC]) -> type[_AC]:
         search_area: tuple[type, ...] = _cls.__mro__[::-1]
         for _obj in filter(
-            lambda x: issubclass(x, YassCore) and issubclass(_cls, x),
+            lambda x: issubclass(x, ByteflowCore) and issubclass(_cls, x),
             search_area,
         ):
-            if _obj is YassCore:
+            if _obj is ByteflowCore:
                 continue
             _cls_ns = _FACTORY_REPO[_obj]
             if isabstract(_cls):
@@ -134,7 +134,7 @@ def _get_factory(id: object | type) -> MappingProxyType[str, type[_AC]]:
         id = [
             cls
             for cls in filter(
-                lambda x: issubclass(x, YassCore)
+                lambda x: issubclass(x, ByteflowCore)
                 and issubclass(id.__class__, x),
                 base_lst,
             )
@@ -157,7 +157,7 @@ def get_all_factories() -> _FACTORY_REPO_TYPE:
 
 _MC = TypeVar("_MC")
 
-YassUndefined = object()
+SfnUndefined = object()
 Undefined = Any
 
 # @beartype

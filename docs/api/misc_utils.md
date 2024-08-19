@@ -2,7 +2,7 @@
 
 ---
 
-::: yass.utils.misc
+::: byteflows.utils.misc
     options:
       show_source: true
       group_by_category: false

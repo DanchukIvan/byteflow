@@ -6,7 +6,7 @@ These containers are mainly represented by dictionary-like singleton objects.
 from collections import defaultdict
 from collections.abc import Callable
 
-from yass.core import SingletonMixin
+from byteflows.core import SingletonMixin
 
 __all__ = ["INPUT_MAP", "OUTPUT_MAP"]
 

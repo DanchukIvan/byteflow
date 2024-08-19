@@ -7,10 +7,11 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 from polars import DataFrame
-from yass import EntryPoint, contentio
-from yass.resources.api import EndpointPath, SimpleEORTrigger
-from yass.scheduling import TimeCondition
-from yass.storages import blob
+
+from byteflows import EntryPoint, contentio
+from byteflows.resources.api import EndpointPath, SimpleEORTrigger
+from byteflows.scheduling import TimeCondition
+from byteflows.storages import blob
 
 __all__ = [
     "API_KEY",
@@ -24,9 +25,9 @@ __all__ = [
 ]
 
 if TYPE_CHECKING:
-    from yass.resources import ApiRequest, ApiResource
-    from yass.scheduling.base import ActionCondition
-    from yass.storages.blob import FsBlobStorage
+    from byteflows.resources import ApiRequest, ApiResource
+    from byteflows.scheduling.base import ActionCondition
+    from byteflows.storages.blob import FsBlobStorage
 
 API_KEY: str | None = getenv("FMP_API")
 API_URL = "https://financialmodelingprep.com/api/v3"
@@ -177,9 +178,9 @@ balance_query: ApiRequest = fmp_api.make_query(
     has_pages=False,
 )
 
+app.run()
+
 content_list = blob.ls_storage(storage.engine, "fmp-api")
 print(content_list)
 content = blob.read(storage.engine, content_list[0])
 print(content)
-
-# app.run()

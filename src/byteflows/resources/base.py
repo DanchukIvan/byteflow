@@ -4,19 +4,19 @@ from abc import abstractmethod
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Literal, Self, overload
 
-from yass.core import YassCore
-from yass.scheduling import AlwaysRun
+from byteflows.core import ByteflowCore
+from byteflows.scheduling import AlwaysRun
 
 if TYPE_CHECKING:
     from aiohttp import ClientResponse
 
-    from yass.contentio import IOContext
-    from yass.scheduling import ActionCondition
+    from byteflows.contentio import IOContext
+    from byteflows.scheduling import ActionCondition
 
 __all__ = ["ApiEORTrigger", "BaseResource", "BaseResourceRequest"]
 
 
-class BaseResourceRequest(YassCore):
+class BaseResourceRequest(ByteflowCore):
     """
     Base class for resource request objects. The request object forms part
     of the resource processing context and generates URLs to which the
@@ -47,7 +47,7 @@ class BaseResourceRequest(YassCore):
         self.enable = True
 
     @abstractmethod
-    async def gen_url(self) -> AsyncGenerator[str, None]:
+    async def gen_url(self) -> AsyncGenerator[str]:
         """
         The method creates a url generator to crawl the resource. The specific implementation
         of the method depends on the type of resource (there is a direct functional connection
@@ -68,11 +68,11 @@ class BaseResourceRequest(YassCore):
         return self.io_context
 
 
-class BaseResource(YassCore):
+class BaseResource(ByteflowCore):
     """
     Base class for resources. Essentially, the Resource class is an
     abstraction of the entry point for interacting with some real data source
-    (in the case of Yass, a network resource like a site or api). The class
+    (in the case of Sfn, a network resource like a site or api). The class
     accumulates information about restrictions on the use of a data source,
     including the permissible frequency of accessing it, all planned queries
     to the source, and other information that forms the context for
@@ -146,7 +146,7 @@ class BaseResource(YassCore):
         ...
 
 
-class ApiEORTrigger(YassCore):
+class ApiEORTrigger(ByteflowCore):
     """
     The base class of triggers for API resources. Triggers are used as an indicator of the end of the payload
     in a resource based on a given criterion. This sign can be either the value of the response header or some

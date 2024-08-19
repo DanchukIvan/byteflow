@@ -4,7 +4,7 @@
 
 ## Core classes
 
-::: yass.storages.base
+::: byteflows.storages.base
     options:
       show_source: true
       group_by_category: false
@@ -13,7 +13,7 @@
 
 ## Service classes and utilities
 
-::: yass.storages.base
+::: byteflows.storages.base
     options:
       show_source: true
       group_by_category: false

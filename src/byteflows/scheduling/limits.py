@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from rich.pretty import pprint
 
-from yass.scheduling import BaseLimit
+from byteflows.scheduling import BaseLimit
 
 if TYPE_CHECKING:
-    from yass.storages import BaseBufferableStorage
+    from byteflows.storages import BaseBufferableStorage
 
 
 __all__ = [

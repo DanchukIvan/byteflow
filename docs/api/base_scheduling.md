@@ -4,7 +4,7 @@
 
 ## Core classes
 
-::: yass.scheduling.base
+::: byteflows.scheduling.base
     options:
       show_source: true
       group_by_category: false

@@ -1,13 +1,14 @@
-site_name: Yass - Yet Another Simple Scraper
+site_name: Byteflows
 site_description: Simple and powerful data scraper
 strict: true
 
-repo_name: yass
-repo_url: https://github.com/DanchukIvan/yass
+repo_name: byteflows
+repo_url: https://github.com/DanchukIvan/byteflows
 edit_uri: ""
-site_url: "https://danchukivan.github.io/yass/"
+site_url: "https://danchukivan.github.io/byteflows/"
 
 theme:
+  logo: icons/logo.png
   name: "material"
   font:
     text: Roboto
@@ -54,6 +55,10 @@ plugins:
   - mike:
       alias_type: symlink
       canonical_version: latest
+      version_selector: true
+
+extra_css:
+  - css/style.css
 
 extra:
   generator: true
@@ -87,8 +92,8 @@ markdown_extensions:
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
 
 nav:
-  - Welcome to Yass: index.md
-  - Understanding Yass:
+  - Welcome to byteflows: index.md
+  - Understanding byteflows:
       - Main components: about/concepts.md
       - Tutorial:
           - Let's get started: about/tutorial/step_1.md
@@ -96,7 +101,7 @@ nav:
           - Run it: about/tutorial/step_3.md
   - API documentation:
       - About the API section: api/about_section.md
-      - Entrypoint: api/yass.md
+      - Entrypoint: api/byteflows.md
       - Working with content:
           - ContentIO: api/contentio.md
           - Common: api/common.md

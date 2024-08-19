@@ -22,7 +22,7 @@ BUILD_TYPE_RE = re.compile(r"(?<=\[)\w+")
 UNSTABLE_RE = re.compile(r"a|b|rc|dev")
 TAG_CHECK_RE = re.compile(r"\bv?[\d{1,2}\.?]+(?=\.)\b")
 
-COMMIT_PATH = "C:\\Users\\IvanDanchuk\\yass\\hooks\\test_dummy_commit.txt"
+COMMIT_PATH = "C:\\Users\\IvanDanchuk\\byteflows\\hooks\\test_dummy_commit.txt"
 
 CHANGE_MAP = {
     ("build", "docs", "bugfix", "chore", "style"): "micro",

@@ -2,7 +2,7 @@ from copy import deepcopy
 
 from yarl import URL
 
-from yass.core import SingletonMixin
+from byteflows.core import SingletonMixin
 
 __all__ = ["build_proxy_url", "get_proxy_list", "remove_proxy_url"]
 

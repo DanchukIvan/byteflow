@@ -14,11 +14,11 @@ from sys import platform
 from typing import IO, TYPE_CHECKING, Any, Self, cast
 
 if TYPE_CHECKING:
-    from yass.storages import BaseBufferableStorage
+    from byteflows.storages import BaseBufferableStorage
 
-from yass.contentio.common import *
-from yass.contentio.helpers import *
-from yass.core import Undefined, YassUndefined
+from byteflows.contentio.common import *
+from byteflows.contentio.helpers import *
+from byteflows.core import SfnUndefined, Undefined
 
 __all__ = [
     "IOBoundPipeline",
@@ -521,8 +521,8 @@ class IOContext:
         self.out_format: str = out_format
         self._check_io()
         self.storage: BaseBufferableStorage = storage
-        self.path_temp: PathTemplate | Undefined = YassUndefined
-        self.pipeline: IOBoundPipeline | Undefined = YassUndefined
+        self.path_temp: PathTemplate | Undefined = SfnUndefined
+        self.pipeline: IOBoundPipeline | Undefined = SfnUndefined
 
     @property
     def out_path(self) -> str:

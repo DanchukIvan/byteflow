@@ -5,18 +5,18 @@ from asyncio import FIRST_COMPLETED, create_task, wait
 from dataclasses import dataclass, field
 from importlib import import_module
 from threading import Thread
-from types import ModuleType
 from typing import TYPE_CHECKING, Literal, TypeVar
 
-from yass.data_collectors import ApiDataCollector, BaseDataCollector
-from yass.resources import ApiResource
-from yass.resources.base import BaseResource
-from yass.storages.base import BaseBufferableStorage
+from byteflows.data_collectors import ApiDataCollector, BaseDataCollector
+from byteflows.resources import ApiResource
+from byteflows.resources.base import BaseResource
+from byteflows.storages.base import BaseBufferableStorage
 
 if TYPE_CHECKING:
     from asyncio import Task
+    from types import ModuleType
 
-    from yass.storages import FsBlobStorage
+    from byteflows.storages import FsBlobStorage
 
 __all__ = ["EntryPoint"]
 
@@ -54,8 +54,8 @@ class EntryPoint:
         Returns:
             ApiResource: instance of api resource.
         """
-        impl = BaseResource.available_impl()[resource_type]
-        instance = impl(url)
+        impl: type[ApiResource] = BaseResource.available_impl()[resource_type]
+        instance: ApiResource = impl(url)
         self.registred_resources.append(instance)
         return instance
 
@@ -73,8 +73,10 @@ class EntryPoint:
         Returns:
             FsBlobStorage: FsBlobStorage instance.
         """
-        impl = BaseBufferableStorage.available_impl()[storage_type]
-        instance = impl()
+        impl: type[FsBlobStorage] = BaseBufferableStorage.available_impl()[
+            storage_type
+        ]
+        instance: FsBlobStorage = impl()
         return instance
 
     async def _collect_data(self) -> None:
