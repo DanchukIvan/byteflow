@@ -1,108 +1,108 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/CHANGELOG/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/CHANGELOG/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/roadmap/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/roadmap/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/about/concepts/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/about/concepts/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/about/tutorial/step_1/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/about/tutorial/step_1/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/about/tutorial/step_2/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/about/tutorial/step_2/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/about/tutorial/step_3/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/about/tutorial/step_3/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/api/about_section/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/api/about_section/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/api/api_data_collectors/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/api/api_data_collectors/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/api/api_resources/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/api/api_resources/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/api/base_data_collectors/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/api/base_data_collectors/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/api/base_resources/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/api/base_resources/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/api/base_scheduling/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/api/base_scheduling/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/api/base_storages/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/api/base_storages/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/api/blob_storage/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/api/blob_storage/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/api/common/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/api/byteflow/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/api/contentio/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/api/common/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/api/helpers/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/api/contentio/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/api/misc_utils/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/api/helpers/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/api/scheduling/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/api/misc_utils/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://danchukivan.github.io/selectfn/latest/api/selectfn/</loc>
-         <lastmod>2024-08-19</lastmod>
+         <loc>https://danchukivan.github.io/byteflow/latest/api/scheduling/</loc>
+         <lastmod>2024-08-20</lastmod>
          <changefreq>daily</changefreq>
     </url>
 </urlset>
