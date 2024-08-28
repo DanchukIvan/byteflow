@@ -1,7 +1,10 @@
-<h1 align="center">
-  <img src="https://raw.githubusercontent.com/DanchukIvan/byteflows/main/docs/icons/logo.png" alt="byteflows" width="200px">
-  <br>
-</h1>
+
+<figure align="center">
+    <img src="https://raw.githubusercontent.com/DanchukIvan/byteflows/main/docs/icons/logo.png" alt="byteflows" width="200px">
+    <figcaption>
+    <a href="https://www.freepik.com/icon/big-data_5316461#fromView=search&page=3&position=30&uuid=d40e1557-77ae-4504-8465-264e0e731318">Icon by Parzival’ 1997</a>
+    </figcaption>
+</figure>
 
 # **Simple data workflows**
 
@@ -42,7 +45,7 @@ pip install byteflows
 
 ## **More information about the project**
 
-You can learn more about Byteflows in the [project documentation](https://danchukivan.github.io/Byteflows/), including the API and Tutorial sections. Changes can be monitored in the Changelog section.
+You can learn more about Byteflows in the [project documentation](https://danchukivan.github.io/byteflows/), including the API and Tutorial sections. Changes can be monitored in the Changelog section.
 
 ## **Project status**
 
