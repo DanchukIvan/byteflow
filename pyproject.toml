@@ -60,7 +60,9 @@ dev_tools=[
     "morefs[asynclocal]<1.0.0,>=0.1.2",
     "orjson>=3.10.0",
 ]
-hook=["pre-commit<4.0.0,>=3.6.0"]
+hook=[
+    "pre-commit<4.0.0,>=3.6.0",
+]
 doc=[
     "mkdocs-material>=9.5.27",
     "mkdocstrings[python]>=0.24.0",

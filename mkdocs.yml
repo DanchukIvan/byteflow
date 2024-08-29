@@ -5,7 +5,7 @@ strict: true
 repo_name: byteflows
 repo_url: https://github.com/DanchukIvan/byteflows
 edit_uri: ""
-site_url: "https://danchukivan.github.io/byteflows/"
+site_url: https://byteflows.website.yandexcloud.net/
 
 theme:
   logo: icons/logo.png
@@ -52,6 +52,7 @@ plugins:
   - mkdocs-simple-hooks:
       hooks:
         on_pre_build: "docs.plugins.scripts:copy_changelog"
+        on_post_build: "docs.plugins.scripts:docs_to_site"
   - mike:
       alias_type: symlink
       canonical_version: latest

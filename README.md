@@ -1,10 +1,10 @@
 
-<figure align="center">
-    <img src="https://raw.githubusercontent.com/DanchukIvan/byteflows/main/docs/icons/logo.png" alt="byteflows" width="200px">
-    <figcaption>
-    <a href="https://www.freepik.com/icon/big-data_5316461#fromView=search&page=3&position=30&uuid=d40e1557-77ae-4504-8465-264e0e731318">Icon by Parzival’ 1997</a>
-    </figcaption>
-</figure>
+<p align="center">
+    <img src="https://storage.yandexcloud.net/byteflows/icons/logo.png" alt="byteflows" width="200px">
+</p>
+<p align="center">
+<a href="https://www.freepik.com/icon/big-data_5316461#fromView=search&page=3&position=30&uuid=d40e1557-77ae-4504-8465-264e0e731318" >Icon by Parzival’ 1997</a>
+</p>
 
 # **Simple data workflows**
 
